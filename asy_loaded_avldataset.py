@@ -671,8 +671,9 @@ __all__ = [
 
 def avl_data_set(device):
     print(device)
-    #folder_path = "/tmp/pycharm_project_710/datasetcl"
-    folder_path = "/custom/dataset/vo_dataset/test-18exp"# 替换为你的文件夹路径
+
+    #absolte path in westworld /home/luo/storage/PointNav-VO-cl-baseline/dataset/vo_dataset/test-72exp
+    folder_path = "/custom/dataset/vo_dataset/test-72exp"
     splitenum = 72
 
     files = os.listdir(folder_path)
