@@ -669,7 +669,7 @@ def avl_data_set(device):
     splitenum = 72
     print(device)
     #folder_path = "/tmp/pycharm_project_710/datasetcl"
-    folder_path = "/custom/dataset/vo_dataset/test-18exp"# 替换为你的文件夹路径
+    folder_path = "/custom/dataset/vo_dataset/test-72exp"# 替换为你的文件夹路径
     files = os.listdir(folder_path)
     # 过滤出以"train"开头的文件名
     train_files = [f for f in files if f.startswith("train")]

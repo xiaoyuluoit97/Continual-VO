@@ -28,17 +28,19 @@ import math
 from collections import OrderedDict
 from functools import partial
 from typing import Any, Callable, Dict, Optional, Sequence, Set, Tuple, Type, Union, List
+import os
 try:
     from typing import Literal
 except ImportError:
     from typing_extensions import Literal
-import os
+RETURNPIC = 1
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint
 from torch.jit import Final
-
+import torchvision
+from model_utils.running_mean_and_var import RunningMeanAndVar
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, \
     OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
 from timm.layers import PatchEmbed, Mlp, DropPath, AttentionPoolLatent, RmsNorm, PatchDropout, SwiGLUPacked, \
@@ -54,7 +56,7 @@ ACTION_NUM = 3
 _logger = logging.getLogger(__name__)
 
 INPUTWAY = 1
-SHOWOBS = 0
+
 class Attention(nn.Module):
     fused_attn: Final[bool]
 
@@ -406,6 +408,7 @@ class VisionTransformer(nn.Module):
             depth: int = 12,
             num_heads: int = 12,
             mlp_ratio: float = 4.,
+            splite_head:bool = False,
             qkv_bias: bool = True,
             qk_norm: bool = False,
             init_values: Optional[float] = None,
@@ -416,6 +419,7 @@ class VisionTransformer(nn.Module):
             fc_norm: Optional[bool] = None,
             dynamic_img_size: bool = False,
             dynamic_img_pad: bool = False,
+            normalize_visual_inputs: bool = False,
             drop_rate: float = 0.,
             pos_drop_rate: float = 0.,
             patch_drop_rate: float = 0.,
@@ -473,23 +477,54 @@ class VisionTransformer(nn.Module):
         self.no_embed_class = no_embed_class  # don't embed prefix positions (includes reg)
         self.dynamic_img_size = dynamic_img_size
         self.grad_checkpointing = False
-
-
-
+        self.normalize_visual_inputs = normalize_visual_inputs
+        if self.normalize_visual_inputs:
+            self.running_mean_and_var_rgb = RunningMeanAndVar(3)
+            self.running_mean_and_var_depth = RunningMeanAndVar(1)
+        else:
+            self.running_mean_and_var_rgb = nn.Sequential()
+            self.running_mean_and_var_depth = nn.Sequential()
+        self.splite_head=splite_head
+        inpth,inptw = img_size
         embed_args = {}
         if dynamic_img_size:
             # flatten deferred until after pos embed
             embed_args.update(dict(strict_img_size=False, output_fmt='NHWC'))
-        self.patch_embed = embed_layer(
-            img_size=img_size,
-            patch_size=patch_size,
-            in_chans=in_chans,
-            embed_dim=embed_dim,
-            bias=not pre_norm,  # disable bias if pre-norm is used (e.g. CLIP)
-            dynamic_img_pad=dynamic_img_pad,
-            **embed_args,
-        )
-        num_patches = self.patch_embed.num_patches
+
+        if self.splite_head:
+            self.patch_embed_rgb = embed_layer(
+                img_size=(inpth / 2, inptw),
+                patch_size=patch_size,
+                in_chans=in_chans,
+                embed_dim=embed_dim,
+                bias=not pre_norm,  # disable bias if pre-norm is used (e.g. CLIP)
+                dynamic_img_pad=dynamic_img_pad,
+                **embed_args,
+            )
+            self.patch_embed_depth = embed_layer(
+                img_size=(inpth / 2, inptw),
+                patch_size=patch_size,
+                in_chans=in_chans,
+                embed_dim=embed_dim,
+                bias=not pre_norm,  # disable bias if pre-norm is used (e.g. CLIP)
+                dynamic_img_pad=dynamic_img_pad,
+                **embed_args,
+            )
+            num_patches = int(self.patch_embed_rgb.num_patches + self.patch_embed_depth.num_patches)
+        else:
+            self.patch_embed = embed_layer(
+                img_size=(inpth, inptw),
+                patch_size=patch_size,
+                in_chans=in_chans,
+                embed_dim=embed_dim,
+                bias=not pre_norm,  # disable bias if pre-norm is used (e.g. CLIP)
+                dynamic_img_pad=dynamic_img_pad,
+                **embed_args,
+            )
+            num_patches = int(self.patch_embed.num_patches)
+
+
+
         self.embed_liner = nn.Linear(ACTION_NUM, self.embed_dim) if class_token else None
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
         self.reg_token = nn.Parameter(torch.zeros(1, reg_tokens, embed_dim)) if reg_tokens else None
@@ -541,30 +576,8 @@ class VisionTransformer(nn.Module):
         if weight_init != 'skip':
             self.init_weights(weight_init)
 
-    def save_obs_as_img(self, x,action):
-        import sys
-        from PIL import Image
-        final = F.interpolate(x, size=(320, 160))
-
-        x = x[1,:,:,:]
-        ipt = (x * 255).clamp(0, 255).to(torch.uint8)
-        image_np = ipt.permute(1, 2, 0).cpu().numpy()
-        image_pil = Image.fromarray(image_np)
-        # 保存图像
-        file_path = os.path.join(os.getcwd(), 'input_raw.png')
-        image_pil.save(file_path)
-
-        finalinput = final[1,:,:,:]
-        finalinput = (finalinput * 255).clamp(0, 255).to(torch.uint8)
-        finalimage_np = finalinput.permute(1, 2, 0).cpu().numpy()
-        finalimage_pil = Image.fromarray(finalimage_np)
-        final_path = os.path.join(os.getcwd(), 'input_final.png')
-        finalimage_pil.save(final_path)
-        print(action[1])
-        sys.exit()
-        
     def _preprocess_rgbd(self, observation_pairs):
-        input_rgbd,actions= None,None
+        rgb_input,depth_input,actions= None,None,None
 
         rgb_observations = observation_pairs[:, :, :, :6]
         # permute tensor to dimension [BATCH x CHANNEL x HEIGHT X WIDTH]
@@ -586,22 +599,23 @@ class VisionTransformer(nn.Module):
         act_observations = act_observations.to(dtype=torch.long)
         actions = F.one_hot(act_observations, num_classes=3)[:, 0, 0, 0, :]
         actions = actions.to(dtype=torch.float32)
-        if INPUTWAY == 1:
-            # blow up depth -> b,h,w,3
-            depth1 = depth1.expand(-1, 3, -1, -1)
-            depth2 = depth2.expand(-1, 3, -1, -1)
-            input_rgbd = torch.concat((rgb1, rgb2, depth1, depth2), dim=2)
-            if SHOWOBS:
-                self.save_obs_as_img(input_rgbd,actions)
-            input_rgbd = F.interpolate(input_rgbd, size=(320, 160))
-        elif INPUTWAY == 2:
-            rgbd1 = torch.concat((rgb1, depth1), dim=1)
-            rgbd2 = torch.concat((rgb2, depth2), dim=1)
-            input_rgbd = torch.concat((rgbd1, rgbd2), dim=2)
-            input_rgbd = F.interpolate(input_rgbd, size=(320, 320))
-            del rgbd1,rgbd2
-        del rgb1,rgb2,depth1,depth2
-        return input_rgbd, actions
+
+
+        depth_input = torch.concat((depth1, depth2), dim=2)
+        depth_input = self.running_mean_and_var_rgb(depth_input)
+        depth_input = depth_input.expand(-1, 3, -1, -1)
+        depth_input = F.interpolate(depth_input, size=(160, 160))
+
+        rgb_input = torch.concat((rgb1, rgb2), dim=2)
+        rgb_input = self.running_mean_and_var_rgb(rgb_input)
+        rgb_input = F.interpolate(rgb_input, size=(160, 160))
+
+
+
+
+
+        del observation_pairs,rgb1, rgb2,depth1, depth2
+        return rgb_input,depth_input,actions
 
     def init_weights(self, mode: Literal['jax', 'jax_nlhb', 'moco', ''] = '') -> None:
         assert mode in ('jax', 'jax_nlhb', 'moco', '')
@@ -734,8 +748,13 @@ class VisionTransformer(nn.Module):
             return tuple(zip(outputs, prefix_tokens))
         return tuple(outputs)
 
-    def forward_features(self, x: torch.Tensor,action: torch.Tensor) -> torch.Tensor:
-        x = self.patch_embed(x)
+    def forward_features(self, rgb: torch.Tensor,depth: torch.Tensor,action: torch.Tensor) -> torch.Tensor:
+        if self.splite_head:
+            x_rgb = self.patch_embed_rgb(rgb)
+            x_depth = self.patch_embed_depth(depth)
+            x = torch.concat((x_rgb, x_depth), dim=1)
+        else:
+            x = self.patch_embed(torch.concat((rgb, depth), dim=2))
         x = self._pos_embed(x,action)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
@@ -758,12 +777,32 @@ class VisionTransformer(nn.Module):
         return x if pre_logits else self.head(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x,action = self._preprocess_rgbd(x)
-        x = self.forward_features(x,action)
+        rgb,depth,action = self._preprocess_rgbd(x)
+        x = self.forward_features(rgb,depth,action)
         x = self.forward_head(x)
         return x
 
+def _save_obs_as_img(x,action):
+        import sys
+        from PIL import Image
+        final = F.interpolate(x, size=(320, 160))
 
+        x = x[1,:,:,:]
+        ipt = (x * 255).clamp(0, 255).to(torch.uint8)
+        image_np = ipt.permute(1, 2, 0).cpu().numpy()
+        image_pil = Image.fromarray(image_np)
+        # 保存图像
+        file_path = os.path.join(os.getcwd(), 'input_raw.png')
+        image_pil.save(file_path)
+
+        finalinput = final[1,:,:,:]
+        finalinput = (finalinput * 255).clamp(0, 255).to(torch.uint8)
+        finalimage_np = finalinput.permute(1, 2, 0).cpu().numpy()
+        finalimage_pil = Image.fromarray(finalimage_np)
+        final_path = os.path.join(os.getcwd(), 'input_final.png')
+        finalimage_pil.save(final_path)
+        print(action[1])
+        sys.exit()
 def init_weights_vit_timm(module: nn.Module, name: str = '') -> None:
     """ ViT weight initialization, original timm impl (for reproducibility) """
     if isinstance(module, nn.Linear):
