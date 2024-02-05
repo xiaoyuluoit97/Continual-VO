@@ -526,7 +526,8 @@ class VisionTransformer(nn.Module):
 
 
         self.embed_liner = nn.Linear(ACTION_NUM, self.embed_dim) if class_token else None
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
+        #self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if class_token else None
+        self.cls_token = torch.zeros(1, 1, embed_dim)
         self.reg_token = nn.Parameter(torch.zeros(1, reg_tokens, embed_dim)) if reg_tokens else None
         embed_len = num_patches if no_embed_class else num_patches + self.num_prefix_tokens
         self.pos_embed = nn.Parameter(torch.randn(1, embed_len, embed_dim) * .02)
@@ -678,8 +679,9 @@ class VisionTransformer(nn.Module):
 
         to_cat = []
         if self.cls_token is not None:
-            self.cls_token = torch.nn.Parameter(self.embed_liner(action).reshape(x.shape[0], 1, self.embed_dim),
-                                                requires_grad=False)
+            #self.cls_token = torch.nn.Parameter(self.embed_liner(action).reshape(x.shape[0], 1, self.embed_dim),
+                                                #requires_grad=False)
+            self.cls_token = self.embed_liner(action).reshape(x.shape[0], 1, self.embed_dim)
             to_cat.append(self.cls_token.expand(x.shape[0], -1, -1))
         if self.reg_token is not None:
             to_cat.append(self.reg_token.expand(x.shape[0], -1, -1))

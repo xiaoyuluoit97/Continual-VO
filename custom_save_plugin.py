@@ -1,6 +1,8 @@
 import gc
 import os
 import random
+import numpy as np
+
 from avalanche.evaluation import PluginMetric
 import torch
 import torchmetrics
@@ -18,8 +20,6 @@ from avalanche.training import OnlineNaive
 from datetime import datetime
 import sys
 import wandb
-#from memory_profiler import profile
-from asy_loaded_avldataset import avl_data_set
 from avalanche.training.supervised import Naive,EWC,LwF
 from avalanche.training.templates import SupervisedTemplate
 #from kubernetesdlprofile import kubeprofiler
@@ -34,7 +34,7 @@ RESUME_PATH = "log/naive-fwt"
 
 
 class CustomSavePlugin(PluginMetric):
-    def __init__(self,TIMES,TRAIN,RESUME_PATH):
+    def __init__(self,times,train,resume_path):
         """
         Creates an instance of a plugin metric.
 
@@ -49,23 +49,40 @@ class CustomSavePlugin(PluginMetric):
         self.currentexp_train_epoch_iter_info = {}  # 用于存储已读取的数据
         self.currentexp_eval_iter_info = []
         self.whole_size = 13888
-        self.times=TIMES
-        self.train_name=TRAIN
-        self.resume_path=RESUME_PATH
+        self.times=times
+        self.train_name=train
+        self.resume_path=resume_path
 
     def wandblogger(self, loss_result, eval_flag, scence_num, epochs):
         if eval_flag == 1:
+            wandb.log({f"test_general_loss/all_general_loss": loss_result[0]})
+            #wandb.log({f"test_general_loss/all_general_abs_dx": loss_result[1]})
+            #wandb.log({f"test_general_loss/all_general_abs_dz": loss_result[2]})
+            #wandb.log({f"test_general_loss/all_general_abs_dyaw": loss_result[3]})
+
             wandb.log({f"test_loss/experience{scence_num}_loss": loss_result[0]})
             wandb.log({f"test/experience{scence_num}_abs_dx": loss_result[1]})
             wandb.log({f"test/experience{scence_num}_abs_dz": loss_result[2]})
             wandb.log({f"test/experience{scence_num}_abs_dyaw": loss_result[3]})
         elif eval_flag == 0:
             wandb.log({f"train_loss/all_general_loss": loss_result[0]})
+            #wandb.log({f"train_general_loss/all_general_loss": loss_result[0]})
+            #wandb.log({f"train_general_loss/all_general_abs_dx": loss_result[1]})
+            #wandb.log({f"train_general_loss/all_general_abs_dz": loss_result[2]})
+            #wandb.log({f"train_general_loss/all_general_abs_dyaw": loss_result[3]})
+
+
+
             wandb.log({f"train/experience{scence_num}_general_loss": loss_result[0]})
             wandb.log({f"train/experience{scence_num}_abs_dx": loss_result[1]})
             wandb.log({f"train/experience{scence_num}_abs_dz": loss_result[2]})
             wandb.log({f"train/experience{scence_num}_abs_dyaw": loss_result[3]})
         elif eval_flag == -1:
+            #wandb.log({f"validation_loss/all_general_loss": loss_result[0]})
+            #wandb.log({f"validation_loss/all_general_abs_dx": loss_result[1]})
+            #wandb.log({f"validation_loss/all_general_abs_dz": loss_result[2]})
+            #wandb.log({f"validation_loss/all_general_abs_dyaw": loss_result[3]})
+
             wandb.log({f"validation_loss/experience{scence_num}_loss_by_epochs": loss_result[0]})
             wandb.log({f"validation/experience{scence_num}_abs_dx": loss_result[1]})
             wandb.log({f"validation/experience{scence_num}_abs_dz": loss_result[2]})
@@ -168,13 +185,15 @@ class CustomSavePlugin(PluginMetric):
         result_loss = np.mean(result_loss, axis=0)
         # print("当前准备记录validation,epoch是 ",self.current_epoch_num)
         datasize = len(strategy.adapted_dataset)
+        print(datasize)
         if datasize == 1024:
             self.wandblogger(result_loss, -1, strategy.experience.current_experience, self.current_epoch_num)
         elif datasize == 2048:
             self.wandblogger(result_loss, 1, strategy.experience.current_experience, self.current_epoch_num)
+        elif datasize == 13888:
+            self.wandblogger(result_loss, -1, strategy.experience.current_experience, self.current_epoch_num)
         else:
             print("some thing wrong happen")
-
         del self.currentexp_eval_iter_info
         gc.collect()
         torch.cuda.empty_cache()

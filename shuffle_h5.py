@@ -3,11 +3,13 @@ import numpy as np
 import random
 import os
 from tqdm import tqdm
-h5_files = [file for file in os.listdir('.') if file.endswith('.h5')]
+#h5_files = [file for file in os.listdir('.') if file.endswith('.h5')]
 # Open the H5 file
-for h5_file in h5_files:
-    print("Processing file:", h5_file)
-    with h5py.File(h5_file, 'r+') as f:
+def main():
+
+    #print("Processing file:", h5_file)
+    #test_Brevort_20.h5
+    with h5py.File("/custom/dataset/vo_dataset/test-72exp/train_Applewold_19.h5", 'r+') as f:
         # Create a dictionary to store the data of each dataset
         alldata_dict = {}
         chunk_sizes = {}  # Record the size of each chunk
@@ -31,9 +33,9 @@ for h5_file in h5_files:
         # Generate shuffled indices
         shuffled_indices = list(range(dataset_len))
         random.shuffle(shuffled_indices)
-        with open('shuffled_indices.txt', 'w') as file:
-            for idx in shuffled_indices:
-                file.write(str(idx) + '\n')
+        #with open('shuffled_indices.txt', 'w') as file:
+            #for idx in shuffled_indices:
+                #file.write(str(idx) + '\n')
         # Iterate over each dataset and rearrange the data according to the shuffled indices
         for dataset_name, data in tqdm(alldata_dict.items(), desc="Writing in datasets"):
             idx = 0
@@ -46,4 +48,6 @@ for h5_file in h5_files:
                 idx += chunk_size
         f.flush()
 
-print("Shuffling completed.")
+    print("Shuffling completed.")
+if __name__ == "__main__":
+    main()

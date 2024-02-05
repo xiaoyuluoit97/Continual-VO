@@ -30,33 +30,6 @@ NO_NOISE_DELTAS = {
     TURN_RIGHT: [0.0, 0.0, -np.radians(30)],
 }
 
-def wandblogger(actions,abs_dx,abs_dz,abs_dyaw,eval_flag,scence_num,loss):
-    if eval_flag==1:
-        wandb.log({"eval/scence{scence_num}_loss": loss})
-        if len(actions) == 1:
-            if actions == 1:
-                wandb.log({f"eval/scence{scence_num}_forward_dx": abs_dx, f"eval/scence{scence_num}_forward_dz": abs_dz, f"eval/scence{scence_num}_forward_dyaw": abs_dyaw})
-            elif actions == 2:
-                wandb.log({f"eval/scence{scence_num}_right_dx": abs_dx, f"eval/scence{scence_num}_right_dz": abs_dz, f"eval/scence{scence_num}_right_dyaw": abs_dyaw})
-            elif actions == 3:
-                wandb.log({f"eval/scence{scence_num}_left_dx": abs_dx, f"eval/scence{scence_num}_left_dz": abs_dz, f"eval/scence{scence_num}_left_dyaw": abs_dyaw})
-        else:
-            wandb.log({f"eval/scence{scence_num}_abs_dx": abs_dx})
-            wandb.log({f"eval/scence{scence_num}_abs_dz": abs_dz})
-            wandb.log({f"eval/scence{scence_num}_abs_dyaw": abs_dyaw})
-    elif eval_flag==0:
-        wandb.log({"train/scence{scence_num}_general_loss": loss})
-        if len(actions) == 1:
-            if actions == 1:
-                wandb.log({f"train/scence{scence_num}_forward_dx": abs_dx, f"train/scence{scence_num}_forward_dz": abs_dz, f"train/scence{scence_num}_forward_dyaw": abs_dyaw})
-            elif actions == 2:
-                wandb.log({f"train/scence{scence_num}_right_dx": abs_dx, f"train/scence{scence_num}_right_dz": abs_dz, f"train/scence{scence_num}_right_dyaw": abs_dyaw})
-            elif actions == 3:
-                wandb.log({f"train/scence{scence_num}_left_dx": abs_dx, f"train/scence{scence_num}_left_dz": abs_dz, f"train/scence{scence_num}_left_dyaw": abs_dyaw})
-        else:
-            wandb.log({f"train/scence{scence_num}_abs_dx": abs_dx})
-            wandb.log({f"train/scence{scence_num}_abs_dz": abs_dz})
-            wandb.log({f"train/scence{scence_num}_abs_dyaw": abs_dyaw})
 
 
 class predict_diff_loss(nn.modules.loss._Loss):
@@ -80,31 +53,8 @@ class predict_diff_loss(nn.modules.loss._Loss):
             actions, gt_deltax, gt_deltaz, gt_deltayaw
         )
         loss = _compute_loss(pred_deltax,pred_deltaz,pred_deltayaw,gt_deltax,gt_deltaz,gt_deltayaw,loss_weights,dz_regress_masks)
-        #wandblogger(actions, abs_dx*100, abs_dz*100, abs_dyaw*100,eval_flag,scence_num.item(),loss)
         return loss
 
-def _process_batch(batch_data):
-    (
-        data_types,
-        raw_rgb_pairs,
-        raw_depth_pairs,
-        raw_discretized_depth_pairs,
-        raw_top_down_view_pairs,
-        actions,
-        delta_xs,
-        delta_ys,
-        delta_zs,
-        delta_yaws,
-        dz_regress_masks,
-        chunk_idxs,
-        entry_idxs,
-    ) = batch_data
-
-   # print(batch_data)
-    return actions
-
-def lossfunction_pertoper():
-    return 0
 
 def _compute_loss(
         pred_deltax,
@@ -115,6 +65,7 @@ def _compute_loss(
         gt_deltayaw,
         loss_weights,
         dz_regress_masks=None,
+
 ):
     ##here is the target
 
@@ -123,7 +74,6 @@ def _compute_loss(
     assert pred_deltax.size() == gt_deltax.size()
     delta_x_diffs = (gt_deltax - pred_deltax) ** 2
     loss_dx = torch.mean(delta_x_diffs * loss_weights["dx"])
-
 
 
     assert pred_deltaz.size() == gt_deltaz.size()
@@ -139,6 +89,7 @@ def _compute_loss(
         )[0]
     else:
         filtered_dz_idxes = torch.tensor(np.arange(gt_deltaz.size()[0]))
+
     loss_dz = torch.mean(delta_z_diffs * loss_weights["dz"])
 
     #return loss_dz, abs_diff_dz, target_magnitude_dz, relative_diff_dz
@@ -148,8 +99,8 @@ def _compute_loss(
 
 
 
-
     loss_all = loss_dx + loss_dz + loss_dyaw
+    print("{:.10f}".format(loss_all.item()))
     return loss_all
 
 

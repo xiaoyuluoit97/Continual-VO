@@ -20,6 +20,7 @@ import sys
 import wandb
 #from memory_profiler import profile
 from asy_loaded_actemb import avl_data_set
+from asy_loaded_join import joint_train_dataload
 from avalanche.training.supervised import Naive,EWC,LwF
 from avalanche.training.templates import SupervisedTemplate
 #from kubernetesdlprofile import kubeprofiler
@@ -27,7 +28,8 @@ from avalanche.evaluation.metrics import (
     timing_metrics,
     loss_metrics
 )
-from avalanche.training.plugins import EvaluationPlugin,LwFPlugin,EWCPlugin
+from avalanche.training.plugins import EvaluationPlugin,LwFPlugin,EWCPlugin,ReplayPlugin
+from avalanche.training.storage_policy import BalancedExemplarsBuffer,ExperienceBalancedBuffer,ParametricBuffer
 import vision_transformer
 
 import early
@@ -41,6 +43,7 @@ from model_utils.visual_encoders import resnet
 from model_utils.running_mean_and_var import RunningMeanAndVar
 from vo.common.common_vars import *
 from custom_save_plugin import CustomSavePlugin
+from joint_save_plugin import JointCustomSavePlugin
 from avalanche.logging import (
     InteractiveLogger,
     TextLogger,
@@ -55,23 +58,28 @@ RGB_PAIR_CHANNEL = 6
 DEPTH_PAIR_CHANNEL = 2
 DELTA_DIM = 3
 
-TRAIN = "naive_vit_2head"
-RESUME_PATH = "log/naive_vit_2head"
-TIMES="3"
-RESUME_FILE = "act_emb_naive_vitExp21_resume2time.pth"
+#TRAIN = "act_emb_naive_vit_try"
+TRAIN = "replay_naive_res18"
+#RESUME_PATH = "log/act_emb_naive_vit_try"
+RESUME_PATH = "log/replay_naive_res18"
+TIMES="4"
+RESUME_FILE = "act_emb_naive_vit_tryExp28_resume4time.pth"
 DATA_FOLDER_PATH = "/custom/dataset/vo_dataset/test-72exp"
 OBSERVATION_SPACE = ["rgb", "depth"]
 ESUME_TRAINR = False
 NORMALIZE = False
 DEVICE = "cuda:7"
-VOTRAIN_LR = 2.5e-4
+VOTRAIN_LR = 2.0e-4
 VOTRAIN_ESP = 1.0e-8
 VOTRAIN_WEIGHT_DECAY = 0.0
 OBSERVATION_SIZE = (
     341,
     192,
 )
+JOINT_TRAIN = False
 ACTION_EMBEDDING = True
+TEST_ONLY = False
+REPLAY = True
 def optimizer_continue(model,name):
     if name == "SGD":
         optimizer = optim.SGD(
@@ -96,7 +104,7 @@ def model_select(name,action_embedding,normalize):
             pretrained=False,
             img_size=(320, 160),
             in_chans=3,
-            splite_head=True,
+            splite_head=False,
             class_token=action_embedding,
             normalize_visual_inputs=normalize,
             global_pool='avg',
@@ -129,24 +137,17 @@ def model_select(name,action_embedding,normalize):
     print(f"Now use model:{name} , the total paramter is: {total_params}")
     return model
 
-def load_savepoint(name,actionembedding,model,resume_path,resume_file):
+def load_savepoint(model,resume_path,resume_file):
     match = re.match(r".*Exp(\d+)_", resume_file)
     if match:
         exp_number = int(match.group(1))
         initexperience = exp_number + 1
         print(f"now start from experience {initexperience}")
+        checkpoint = torch.load(os.path.join(resume_path,resume_file)) # 加载检查点
+        model.load_state_dict(checkpoint)
     else:
         print("not find any .pth files")
         initexperience = -1
-
-    if name == 'VIT' and actionembedding:
-        checkpoint = torch.load(os.path.join(resume_path,resume_file)) # 加载检查点
-        cls_token_shape = checkpoint['cls_token'].shape
-        new_cls_token = torch.randn(cls_token_shape)
-        model.cls_token = torch.nn.Parameter(new_cls_token)
-        model.load_state_dict(checkpoint)
-    else:
-        model.load_state_dict(torch.load(os.path.join(resume_path,resume_file)))
 
 
     return initexperience,model
@@ -165,26 +166,34 @@ def main():
     model = model_select("resnet18",ACTION_EMBEDDING,NORMALIZE)
 
     initexperience = 0
+
+    if TEST_ONLY:
+        test(model,initexperience,device)
+
     if ESUME_TRAINR:
-        initexperience, model = load_savepoint("resnet18",ACTION_EMBEDDING, model, RESUME_PATH, RESUME_FILE)
+        initexperience, model = load_savepoint(model, RESUME_PATH, RESUME_FILE)
+
     optimizer = optimizer_continue(model.to(device), "Adam")
     criterion = predict_diff_loss()
-
     #wandb configue
-    #pjn = "VIT-Training-dataset"
-    pjn = 'cleantest'
+    pjn = "RESNET-REPLAY-Training-dataset"
+    #pjn = 'just-for-test'
     wb_logger=WandBLogger(
          project_name=pjn,       # set the wandb project where this run will be logged
          # track hyperparameters and run metadata
          config={
              "learning_rate": VOTRAIN_LR,
              "Nor": NORMALIZE,
-             "action_emb": False,
+             "action_emb": ACTION_EMBEDDING,
              "architecture": "CNN-Resnet18-TwoHiddenlayer512",
              "dataset": "Habitat-Gibson-V2",
              "epochs": 60,
          })
-    custom_plugin = CustomSavePlugin(TIMES,TRAIN,RESUME_PATH)
+    if JOINT_TRAIN:
+        custom_plugin = JointCustomSavePlugin(TIMES, TRAIN, RESUME_PATH)
+
+    else:
+        custom_plugin = CustomSavePlugin(TIMES,TRAIN,RESUME_PATH)
 
     # print to stdout
     interactive_logger = InteractiveLogger()
@@ -198,12 +207,14 @@ def main():
     csv_logger = CSVLogger(log_folder=log_folder)
     text_logger = TextLogger(open(f"{log_folder}log.txt", "a"))
 
+    storage_policy = ParametricBuffer(max_size=1024)
 
     eval_plugin = EvaluationPlugin(
         #EWCPlugin(ewc_lambda=0.3),
         #LwFPlugin(alpha=0.5, temperature=0.1),
+        ReplayPlugin(mem_size=1024, batch_size=32, storage_policy=storage_policy),
         custom_plugin,
-        early.EarlyStoppingPlugin(patience=8,val_stream_name="test_stream",metric_name="Loss_Stream",mode="min",peval_mode="epoch",margin=0.0,verbose=True),
+        early.EarlyStoppingPlugin(patience=5,val_stream_name="test_stream",metric_name="Loss_Stream",mode="min",peval_mode="epoch",margin=0.0,verbose=True),
         accuracy_metrics(
             minibatch=True,
             epoch=True,
@@ -229,13 +240,17 @@ def main():
         optimizer=optimizer,
         criterion=criterion,
         evaluator=eval_plugin,
-        train_epochs=60,
+        train_epochs=1,
         device=device,
         eval_every=1
     )
 
-    benchmark,test_benchmark= avl_data_set(ACTION_EMBEDDING,DATA_FOLDER_PATH,device)
-    training(benchmark,test_benchmark,cl_strategy,initexperience)
+    if JOINT_TRAIN:
+        benchmark,test_benchmark =joint_train_dataload(ACTION_EMBEDDING,DATA_FOLDER_PATH,device)
+    else:
+        benchmark,test_benchmark= avl_data_set(ACTION_EMBEDDING,DATA_FOLDER_PATH,device)
+
+    training(benchmark,cl_strategy,initexperience)
 
 #@profile(precision=2,stream=open('memorytest/training.log','w+'))
 def training(benchmark,cl_strategy,initial_exp):
@@ -244,12 +259,99 @@ def training(benchmark,cl_strategy,initial_exp):
         print("Start of experience: ", experience.current_experience)
         print("Train dataset contains", len(experience.dataset), "instances")
         i = experience.current_experience
+        #cl_strategy.train(experience, shuffle=False)
         cl_strategy.train(experience,eval_streams=[benchmark.test_stream[i:(i+1)]],shuffle=False)
         gc.collect()
+        torch.cuda.empty_cache()
         print("Training & validation completed,test starting")
-        #cl_strategy.eval(teststream_from_benchmark.test_stream,shuffle=False)
+        #cl_strategy.eval(benchmark.test_stream[i:(i + 1)], shuffle=False)
+        torch.cuda.empty_cache()
         print("Evaluation completed")
         #break
 
+
+
+def test(model,start_exp,device):
+    file_names = os.listdir(RESUME_PATH)
+    # 筛选出以".pth"结尾的文件并按EXP数字排序
+    pth_files = [file for file in file_names if file.endswith('.pth')]
+    pth_files.sort(key=lambda x: int(x.split('_')[4][6:]))
+
+    for pth_file in pth_files[start_exp:]:
+        initexperience, model = load_savepoint(model, RESUME_PATH, pth_file)
+        optimizer = optimizer_continue(model.to(device), "Adam")
+        criterion = predict_diff_loss()
+
+        pjn = "VIT-FULL-Test"
+        wb_logger = WandBLogger(
+            project_name=pjn,  # set the wandb project where this run will be logged
+            # track hyperparameters and run metadata
+            config={
+                "learning_rate": VOTRAIN_LR,
+                "Nor": NORMALIZE,
+                "action_emb": False,
+                "architecture": "CNN-Resnet18-TwoHiddenlayer512",
+                "dataset": "Habitat-Gibson-V2",
+                "epochs": 40,
+            })
+
+        # print to stdout
+        interactive_logger = InteractiveLogger()
+        # 根据参数构建一个标识符
+        params_identifier = f"{TRAIN}_Test_Evaluation"
+        # 获取当前日期和时间
+        current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 构建log文件夹路径
+        # log_folder = f"{RESUME_PATH}/csvfile/{current_datetime}_{params_identifier}/"
+        log_folder = f"{RESUME_PATH}/csvfile/"
+        custom_plugin = CustomSavePlugin(times=TIMES,train=TRAIN,resume_path=RESUME_PATH)
+
+        # 现在你可以将log_folder传递给CSVLogger
+        csv_logger = CSVLogger(log_folder=log_folder)
+        text_logger = TextLogger(open(f"{log_folder}log.txt", "a"))
+
+        eval_plugin = EvaluationPlugin(
+            # EWCPlugin(ewc_lambda=0.25),
+            # LwFPlugin(alpha=0.5, temperature=0.1),
+            custom_plugin,
+            early.EarlyStoppingPlugin(patience=6,val_stream_name="test_stream",metric_name="Loss_Stream",mode="min",peval_mode="epoch",margin=0.0,verbose=True),
+            accuracy_metrics(
+                minibatch=True,
+                epoch=True,
+                epoch_running=True,
+                experience=True,
+                stream=True,
+            ),
+            loss_metrics(
+                minibatch=True,
+                epoch=True,
+                epoch_running=True,
+                experience=True,
+                stream=True,
+            ),
+            # ,wb_logger
+            loggers=[interactive_logger, text_logger, csv_logger],
+            collect_all=True,
+        )
+
+        cl_strategy = Naive(
+            model=model,
+            train_mb_size=32,
+            optimizer=optimizer,
+            criterion=criterion,
+            evaluator=eval_plugin,
+            train_epochs=50,
+            device=device,
+            eval_every=1
+        )
+        benchmark, test_benchmark = avl_data_set(ACTION_EMBEDDING,DATA_FOLDER_PATH,device)
+        print("Training & validation completed,test starting")
+        print("现在将要测试的是")
+        print(initexperience)
+        print(initexperience)
+        cl_strategy.eval(test_benchmark.test_stream, shuffle=False)
+        print("Evaluation completed")
+    sys.exit()
+    
 if __name__ == "__main__":
     main()

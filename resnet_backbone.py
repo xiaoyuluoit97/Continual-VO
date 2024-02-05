@@ -19,7 +19,6 @@ from datetime import datetime
 import sys
 import wandb
 #from memory_profiler import profile
-from asy_loaded_avldataset import avl_data_set
 from avalanche.training.supervised import Naive,EWC,LwF
 from avalanche.training.templates import SupervisedTemplate
 #from kubernetesdlprofile import kubeprofiler
@@ -249,7 +248,7 @@ class VisualOdometryCNNBase(nn.Module):
         resnet_baseplanes=64,
         backbone="resnet50",
         output_dim=DELTA_DIM,
-        dropout_p=0.2,
+        dropout_p=0,
         after_compression_flat_size=2048,
         rgb_pair_channel=RGB_PAIR_CHANNEL,
         depth_pair_channel=DEPTH_PAIR_CHANNEL,

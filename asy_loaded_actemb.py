@@ -159,19 +159,22 @@ class CLPairDataset():
         logger.info("Get index mapping from h5py ...")
         self.length = 0
         self._chunk_splits = []
-
+        #self._chunk_fake = ['chunk_0', 'chunk_1', 'chunk_2', 'chunk_3', 'chunk_4', 'chunk_5', 'chunk_6', 'chunk_7']
         with h5py.File(self._data_f, "r", libver="latest") as f:
+            #for scence_n_chunk_k in tqdm(self._chunk_fake):
             for scence_n_chunk_k in tqdm(sorted(f.keys())):
                 self._chunk_splits.append(scence_n_chunk_k)
                 # print(scence_n_chunk_k)
                 valid_idxes = self._indexes(f, scence_n_chunk_k)
                 self.length += len(valid_idxes)
+
         # print(length)
 
         # each chunk in here
         self._chunk_splits = sorted(self._chunk_splits, key=get_num)
 
-        logger.info("... done.\n")
+
+        #logger.info("... done.\n")
 
 
 
@@ -188,27 +191,21 @@ class CLPairDataset():
     def wait_loading(self, num_of_chunk_training):
         # waiting for loading operation
         while num_of_chunk_training not in self.chunk_state or self.chunk_state[num_of_chunk_training] != 2:
-            print("读得太慢")
-            logger.info("读得太慢")
-            logger.info("读得太慢")
-            logger.info("读得太慢")
+            #logger.info("读得太慢")
             self.training_event.wait()
             #self.loading_event.set()
 
     def wait_training(self, num_of_chunk_loading):
         # waiting for training operation
         while num_of_chunk_loading > self._current_training_chunk + CHUNK_NUM_LOAD_MORE:
-            print("读得太慢")
-            logger.info("训练太慢")
-            logger.info("训练太慢")
-            logger.info("训练太慢")
+            #logger.info("训练太慢")
             self.loading_event.wait()
             self.training_event.set()
 
     def training_condition_decide(self):
         # waiting for loading operation
         if self.chunk_state[self._current_training_chunk] == 2:
-            print("读得太慢")
+            #print("读得太慢")
             self.training_event.set()
 
     def loading_condition_decide(self):
@@ -219,9 +216,8 @@ class CLPairDataset():
             self.loading_event.wait()
             #print("后Loading event status:", self.loading_event.is_set())
         else:
-            #print("目前正在读取的",self._current_loading_chunk,"目前正在训练的",self._current_training_chunk)
-            #print("继续读吧小伙子，训练速度够快")
-            print("读得太慢")
+
+            #print("读得太慢")
             self.loading_event.set()
 
     def _memory_controll(self, index):
@@ -665,11 +661,11 @@ __all__ = [
 ]
 
 
-def avl_data_set(device):
+def avl_data_set(ACTION_EMBEDDING,DATA_FOLDER_PATH,device):
     splitenum = 72
     print(device)
     #folder_path = "/tmp/pycharm_project_710/datasetcl"
-    folder_path = "/custom/dataset/vo_dataset/test-72exp"# 替换为你的文件夹路径
+    folder_path = DATA_FOLDER_PATH
     files = os.listdir(folder_path)
     # 过滤出以"train"开头的文件名
     train_files = [f for f in files if f.startswith("train")]
@@ -695,7 +691,8 @@ def avl_data_set(device):
 
     train_dataset = make_dataset_generator(TRAIN_FILE_LIST,folder_path,"train")
     test_dataset = make_dataset_generator(TEST_FILE_LIST, folder_path, "test")
-    eval_dataset = make_dataset_generator(EVAL_FILE_LIST,folder_path,"eval")
+    eval_dataset = make_dataset_generator(EVAL_FILE_LIST, folder_path, "eval")
+    #eval_dataset = make_dataset_generator(EVAL_FILE_LIST,folder_path,"eval")
     #[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     trainstream = LazyStreamDefinition(
         exps_generator = train_dataset,
