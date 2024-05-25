@@ -13,8 +13,7 @@ from avalanche.evaluation.metrics import accuracy_metrics, \
     disk_usage_metrics, gpu_usage_metrics, MAC_metrics, \
     ram_usage_metrics, timing_metrics
 from loss_function_avalanche import predict_diff_loss
-from avalanche.benchmarks.scenarios.online_scenario import OnlineCLScenario
-from avalanche.training import OnlineNaive
+
 from datetime import datetime
 import sys
 import wandb

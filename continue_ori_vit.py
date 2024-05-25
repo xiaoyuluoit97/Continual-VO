@@ -58,28 +58,27 @@ RGB_PAIR_CHANNEL = 6
 DEPTH_PAIR_CHANNEL = 2
 DELTA_DIM = 3
 
-#TRAIN = "act_emb_naive_vit_try"
-TRAIN = "replay_naive_res18"
-#RESUME_PATH = "log/act_emb_naive_vit_try"
-RESUME_PATH = "log/replay_naive_res18"
-TIMES="4"
-RESUME_FILE = "act_emb_naive_vit_tryExp28_resume4time.pth"
+TRAIN = "blind"
+RESUME_PATH = "log/blind"
+TIMES="0"
+RESUME_FILE = "naive_60epExp69_resume1time.pth"
 DATA_FOLDER_PATH = "/custom/dataset/vo_dataset/test-72exp"
 OBSERVATION_SPACE = ["rgb", "depth"]
+#OBSERVATION_SPACE = []
 ESUME_TRAINR = False
 NORMALIZE = False
 DEVICE = "cuda:7"
-VOTRAIN_LR = 2.0e-4
+VOTRAIN_LR = 2.5e-4
 VOTRAIN_ESP = 1.0e-8
 VOTRAIN_WEIGHT_DECAY = 0.0
 OBSERVATION_SIZE = (
     341,
     192,
 )
-JOINT_TRAIN = False
+JOINT_TRAIN = True
 ACTION_EMBEDDING = True
 TEST_ONLY = False
-REPLAY = True
+REPLAY = False
 def optimizer_continue(model,name):
     if name == "SGD":
         optimizer = optim.SGD(
@@ -138,18 +137,19 @@ def model_select(name,action_embedding,normalize):
     return model
 
 def load_savepoint(model,resume_path,resume_file):
+    file_path = os.path.join(resume_path, resume_file)
     match = re.match(r".*Exp(\d+)_", resume_file)
     if match:
         exp_number = int(match.group(1))
         initexperience = exp_number + 1
-        print(f"now start from experience {initexperience}")
-        checkpoint = torch.load(os.path.join(resume_path,resume_file)) # 加载检查点
-        model.load_state_dict(checkpoint)
+        print(f"now start from experience {file_path}")
+
     else:
         print("not find any .pth files")
         initexperience = -1
 
-
+    checkpoint = torch.load(file_path) # 加载检查点
+    model.load_state_dict(checkpoint)
     return initexperience,model
 
 def main():
@@ -163,20 +163,19 @@ def main():
     torch.use_deterministic_algorithms(True)
 
     device = torch.device(DEVICE)
-    model = model_select("resnet18",ACTION_EMBEDDING,NORMALIZE)
-
     initexperience = 0
 
     if TEST_ONLY:
-        test(model,initexperience,device)
+        test(0,device)
 
+    model = model_select("resnet18", ACTION_EMBEDDING, NORMALIZE)
     if ESUME_TRAINR:
         initexperience, model = load_savepoint(model, RESUME_PATH, RESUME_FILE)
 
     optimizer = optimizer_continue(model.to(device), "Adam")
     criterion = predict_diff_loss()
     #wandb configue
-    pjn = "RESNET-REPLAY-Training-dataset"
+    pjn = "blind"
     #pjn = 'just-for-test'
     wb_logger=WandBLogger(
          project_name=pjn,       # set the wandb project where this run will be logged
@@ -207,14 +206,14 @@ def main():
     csv_logger = CSVLogger(log_folder=log_folder)
     text_logger = TextLogger(open(f"{log_folder}log.txt", "a"))
 
-    storage_policy = ParametricBuffer(max_size=1024)
+    #storage_policy = ParametricBuffer(max_size=1024)
 
     eval_plugin = EvaluationPlugin(
         #EWCPlugin(ewc_lambda=0.3),
         #LwFPlugin(alpha=0.5, temperature=0.1),
-        ReplayPlugin(mem_size=1024, batch_size=32, storage_policy=storage_policy),
+        #ReplayPlugin(mem_size=1024, batch_size=32, storage_policy=storage_policy),
         custom_plugin,
-        early.EarlyStoppingPlugin(patience=5,val_stream_name="test_stream",metric_name="Loss_Stream",mode="min",peval_mode="epoch",margin=0.0,verbose=True),
+        early.EarlyStoppingPlugin(patience=8,val_stream_name="test_stream",metric_name="Loss_Stream",mode="min",peval_mode="epoch",margin=0.0,verbose=True),
         accuracy_metrics(
             minibatch=True,
             epoch=True,
@@ -240,7 +239,7 @@ def main():
         optimizer=optimizer,
         criterion=criterion,
         evaluator=eval_plugin,
-        train_epochs=1,
+        train_epochs=60,
         device=device,
         eval_every=1
     )
@@ -255,7 +254,7 @@ def main():
 #@profile(precision=2,stream=open('memorytest/training.log','w+'))
 def training(benchmark,cl_strategy,initial_exp):
 
-    for experience in benchmark.train_stream[initial_exp:]:
+    for experience in benchmark.train_stream[initial_exp:5]:
         print("Start of experience: ", experience.current_experience)
         print("Train dataset contains", len(experience.dataset), "instances")
         i = experience.current_experience
@@ -271,17 +270,19 @@ def training(benchmark,cl_strategy,initial_exp):
 
 
 
-def test(model,start_exp,device):
+def test(start_exp,device):
     file_names = os.listdir(RESUME_PATH)
     # 筛选出以".pth"结尾的文件并按EXP数字排序
     pth_files = [file for file in file_names if file.endswith('.pth')]
     pth_files.sort(key=lambda x: int(x.split('_')[4][6:]))
-
-    for pth_file in pth_files[start_exp:]:
-        initexperience, model = load_savepoint(model, RESUME_PATH, pth_file)
-        optimizer = optimizer_continue(model.to(device), "Adam")
+    print(pth_files)
+    for pth_file in pth_files[0:8]:
+        model = model_select("VIT", ACTION_EMBEDDING, NORMALIZE)
+        initexperience, model_foruse = load_savepoint(model, RESUME_PATH, pth_file)
+        optimizer = optimizer_continue(model_foruse.to(device), "Adam")
         criterion = predict_diff_loss()
 
+        #pjn = "RESNET50-FULL-Test"
         pjn = "VIT-FULL-Test"
         wb_logger = WandBLogger(
             project_name=pjn,  # set the wandb project where this run will be logged
@@ -335,7 +336,7 @@ def test(model,start_exp,device):
         )
 
         cl_strategy = Naive(
-            model=model,
+            model=model_foruse,
             train_mb_size=32,
             optimizer=optimizer,
             criterion=criterion,

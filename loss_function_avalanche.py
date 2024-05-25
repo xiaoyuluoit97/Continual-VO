@@ -30,7 +30,7 @@ NO_NOISE_DELTAS = {
     TURN_RIGHT: [0.0, 0.0, -np.radians(30)],
 }
 
-
+COLLEISIONS=True
 
 class predict_diff_loss(nn.modules.loss._Loss):
     def __init__(self, weight=None, size_average=True):
@@ -46,13 +46,12 @@ class predict_diff_loss(nn.modules.loss._Loss):
         gt_deltax = target[:, 1].unsqueeze(1)
         gt_deltaz = target[:, 2].unsqueeze(1)
         gt_deltayaw = target[:, 3].unsqueeze(1)
-        dz_regress_masks = target[:, 4].unsqueeze(1)
-        eval_flag = target[:, 5].unsqueeze(1)
-        scence_num = target[:, 6].unsqueeze(1)
+        collisions = target[:, 4].unsqueeze(1)
         loss_weights = compute_loss_weights(
             actions, gt_deltax, gt_deltaz, gt_deltayaw
         )
-        loss = _compute_loss(pred_deltax,pred_deltaz,pred_deltayaw,gt_deltax,gt_deltaz,gt_deltayaw,loss_weights,dz_regress_masks)
+        loss = _compute_loss(pred_deltax,pred_deltaz,pred_deltayaw,gt_deltax,gt_deltaz,gt_deltayaw,loss_weights,collisions)
+        #loss = _compute_loss_without_collisions(pred_deltax,pred_deltaz,pred_deltayaw,gt_deltax,gt_deltaz,gt_deltayaw,loss_weights,collisions)
         return loss
 
 
@@ -64,7 +63,8 @@ def _compute_loss(
         gt_deltaz,
         gt_deltayaw,
         loss_weights,
-        dz_regress_masks=None,
+        collisions,
+        
 
 ):
     ##here is the target
@@ -78,18 +78,6 @@ def _compute_loss(
 
     assert pred_deltaz.size() == gt_deltaz.size()
     delta_z_diffs = (gt_deltaz - pred_deltaz) ** 2
-
-    if dz_regress_masks is not None:
-        assert (
-                gt_deltaz.size() == dz_regress_masks.size()
-        )
-        delta_z_diffs = dz_regress_masks * delta_z_diffs
-        filtered_dz_idxes = torch.nonzero(
-            dz_regress_masks == 1.0, as_tuple=True
-        )[0]
-    else:
-        filtered_dz_idxes = torch.tensor(np.arange(gt_deltaz.size()[0]))
-
     loss_dz = torch.mean(delta_z_diffs * loss_weights["dz"])
 
     #return loss_dz, abs_diff_dz, target_magnitude_dz, relative_diff_dz
@@ -98,6 +86,25 @@ def _compute_loss(
     loss_dyaw = torch.mean(delta_yaw_diffs * loss_weights["dyaw"])
 
 
+
+    loss_all = loss_dx + loss_dz + loss_dyaw
+    print("{:.10f}".format(loss_all.item()))
+    return loss_all
+
+def _compute_loss_without_collisions(pred_deltax, pred_deltaz, pred_deltayaw, gt_deltax, gt_deltaz, gt_deltayaw, loss_weights, collisions):
+    compute_loss_mask = 1 - collisions  # Invert collision mask (assuming 0 means collision)
+
+    assert pred_deltax.size() == gt_deltax.size()
+    delta_x_diffs = (gt_deltax - pred_deltax) ** 2
+    loss_dx = torch.sum(delta_x_diffs * loss_weights["dx"] * compute_loss_mask) / torch.sum(compute_loss_mask)
+
+    assert pred_deltaz.size() == gt_deltaz.size()
+    delta_z_diffs = (gt_deltaz - pred_deltaz) ** 2
+    loss_dz = torch.sum(delta_z_diffs * loss_weights["dz"] * compute_loss_mask) / torch.sum(compute_loss_mask)
+
+    assert pred_deltayaw.size() == gt_deltayaw.size()
+    delta_yaw_diffs = (gt_deltayaw - pred_deltayaw) ** 2
+    loss_dyaw = torch.sum(delta_yaw_diffs * loss_weights["dyaw"] * compute_loss_mask) / torch.sum(compute_loss_mask)
 
     loss_all = loss_dx + loss_dz + loss_dyaw
     print("{:.10f}".format(loss_all.item()))

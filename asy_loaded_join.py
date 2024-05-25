@@ -427,7 +427,7 @@ class CLPairDataset():
 def make_dataset_generator(filelist, folder_path,flag):
         #validation
     if flag == "eval":
-        num = 1024
+        num = 50000
         for list in filelist:
             dataset = CLPairDataset(
                 _data_f=os.path.join(folder_path, list),
@@ -442,7 +442,7 @@ def make_dataset_generator(filelist, folder_path,flag):
             )
             yield mkd
     elif flag =="test":
-        num = 1024
+        num = 50000
         for list in filelist:
             dataset = CLPairDataset(
                 _data_f=os.path.join(folder_path, list),
@@ -457,7 +457,7 @@ def make_dataset_generator(filelist, folder_path,flag):
             )
             yield mkd
     else:
-        num = 1024
+        num = 1000000
         for list in filelist:
             dataset = CLPairDataset(
                 _data_f=os.path.join(folder_path, list),
@@ -489,7 +489,7 @@ def joint_train_dataload(ACTION_EMBEDDING,DATA_FOLDER_PATH,device):
     # 按结尾的数字进行排序
     def custom_sort(file_name):
         # 提取文件名中第三段的数字
-        num = int(file_name.split("_")[2].split(".")[0])
+        num = int(file_name.split("_")[1].split(".")[0])
         return num
     # 输出排序后的文件名
     #TRAIN_FILE_LIST= sorted(train_files, key=custom_sort)

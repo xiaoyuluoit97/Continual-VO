@@ -63,10 +63,14 @@ EVAL_FILE_LIST = []
 VIS_SIZE_W = 341
 VIS_SIZE_H = 192
 CHUNK_NUM_LOAD_MORE = 3
-
-FORWARD_ACT_CHANNLE = torch.full((192, 341, 1), 1)
-LEFT_ACT_CHANNLE = torch.full((192, 341, 1), 0)
-RIGHT_ACT_CHANNLE = torch.full((192, 341, 1), 2)
+# num = 27776
+#num = 14912
+# num = 19008
+NUMOFTRAINING=27776
+REPLAYPATH = "/custom/dataset/vo_dataset/test-buffer"
+FORWARD_ACT_CHANNLE = torch.full((192, 341, 1), 0)
+LEFT_ACT_CHANNLE = torch.full((192, 341, 1), -1)
+RIGHT_ACT_CHANNLE = torch.full((192, 341, 1), 1)
 
 
 def get_num_scence(string):
@@ -123,7 +127,6 @@ class CLPairDataset():
         #2 means loaded (in memory)
         self.chunk_state = {}
         self._act_type = act_type
-        self._collision = collision
         self._geo_invariance_types = geo_invariance_types
         self._len = 0
         self._act_left_right_len = 0
@@ -292,6 +295,7 @@ class CLPairDataset():
                     # get valid indexes of each chunk!!!!!!!!!
                     index_of_per_chunk = self._indexes(f, chunk_k)
                     self._actions = f[chunk_k]["actions"][()]
+                    self._collisions = f[chunk_k]["collisions"][()]
                     self._whole_h5_indexs = f[chunk_k]["whole_h5_indexs"][()]
                     self._prev_rgbs = f[chunk_k]["prev_rgbs"][()]
                     self._cur_rgbs = f[chunk_k]["cur_rgbs"][()]
@@ -323,6 +327,7 @@ class CLPairDataset():
                 self.training_condition_decide()
                 #print("now chunk", chunk_k, " is loaded")
                 del self._actions
+                del self._collisions
                 del self._whole_h5_indexs
                 del self._prev_rgbs
                 del self._cur_rgbs
@@ -389,15 +394,16 @@ class CLPairDataset():
 
         self.loaded_indices.add(self._whole_h5_indexs[i])
         data_types.append(CUR_REL_TO_PREV)
-        dz_regress_mask=1
+
 
         chunk_idx = int(scence_n_chunk_k)
         entry_idx = i
 
+
         eval_flag = torch.tensor([self._eval])
         scence_num = torch.tensor([self._scence_num])
         action = self._actions[i]
-
+        collision = self._collisions[i]
         if action == 1:
             acts_channel=FORWARD_ACT_CHANNLE
         elif action == 2:
@@ -406,15 +412,13 @@ class CLPairDataset():
             acts_channel=RIGHT_ACT_CHANNLE
 
         action = torch.tensor([action]).long()
-        dz_regress_mask = torch.tensor([dz_regress_mask]).long()
-        chunk_idx = torch.tensor([chunk_idx]).long()
-        entry_idx = torch.tensor([entry_idx]).long()
+        collision = torch.tensor([collision]).long()
 
         input_pairs = torch.Tensor(
             np.concatenate([prev_rgb, cur_rgb, prev_depth, cur_depth, acts_channel], axis=2)
         )
 
-        target = torch.cat((action, delta_x, delta_z, delta_yaw, dz_regress_mask, eval_flag,scence_num,chunk_idx, entry_idx))
+        target = torch.cat((action, delta_x, delta_z, delta_yaw,collision))
 
         return input_pairs,target.squeeze()
 
@@ -451,7 +455,7 @@ def make_dataset_generator(filelist, folder_path,flag):
             )
             yield mkd
     else:
-        num = 13888
+
         for list in filelist:
             dataset = CLPairDataset(
                 _data_f=os.path.join(folder_path, list),
@@ -461,7 +465,7 @@ def make_dataset_generator(filelist, folder_path,flag):
             )
             mkd = make_classification_dataset(
                 dataset=dataset,
-                targets=[0] * num,
+                targets=[0] * NUMOFTRAINING,
                 #device = device
             )
             yield mkd
@@ -470,205 +474,18 @@ def make_dataset_generator(filelist, folder_path,flag):
 
 
 
-class OnlineCLExperience(DatasetExperience[TCLDataset]):
-    """Online CL (OCL) Experience.
 
-    OCL experiences are created by splitting a larger experience. Therefore,
-    they keep track of the original experience for logging purposes.
-    """
-
-    def __init__(
-        self: TOnlineCLExperience,
-        current_experience: int,
-        origin_stream: CLStream[TOnlineCLExperience],
-        benchmark: CLScenario,
-        dataset: TCLDataset,
-        origin_experience: DatasetExperience,
-        subexp_size: int = 1,
-        is_first_subexp: bool = False,
-        is_last_subexp: bool = False,
-        sub_stream_length: Optional[int] = None,
-        access_task_boundaries: bool = False,
-    ):
-        """Init.
-
-        :param current_experience: experience identifier.
-        :param origin_stream: origin stream.
-        :param origin_experience: origin experience used to create self.
-        :param is_first_subexp: whether self is the first in the sub-experiences
-            stream.
-        :param sub_stream_length: the sub-stream length.
-        """
-        super().__init__(
-            current_experience=current_experience,
-            origin_stream=origin_stream,
-            benchmark=benchmark,
-            dataset=dataset,
-        )
-        self.access_task_boundaries = access_task_boundaries
-
-        self.origin_experience: DatasetExperience = origin_experience
-        self.subexp_size: int = subexp_size
-        self.is_first_subexp: bool = is_first_subexp
-        self.is_last_subexp: bool = is_last_subexp
-        self.sub_stream_length: Optional[int] = sub_stream_length
-
-        self._as_attributes(
-            "origin_experience",
-            "subexp_size",
-            "is_first_subexp",
-            "is_last_subexp",
-            "sub_stream_length",
-            use_in_train=access_task_boundaries,
-        )
-
-    @property
-    def task_labels(self) -> List[int]:
-        return self.origin_experience.task_labels
-
-
-
-
-class OnlineCLExtendScenario(OnlineCLScenario):
-    def __init__(
-        self,
-        #experiences: Iterable[SupervisedClassificationDataset],
-        experiences:LazyStreamDefinition,
-    ):
-
-        if not isinstance(experiences, Iterable):
-            experiences = [experiences]
-
-        online_train_stream = split_online_stream(experiences,4,self)
-
-        streams: List[CLStream] = [online_train_stream]
-
-        # super().__init__(streams=streams)
-
-
-def fixed_size_experience_split(
-    experience: int,
-    dataset:CLPairDataset,
-    experience_size: int,
-    # online_benchmark: TOnlineCLScenario,
-    shuffle: bool = True,
-    drop_last: bool = False,
-    access_task_boundaries: bool = False,
-) -> Generator[OnlineCLExperience[TClassificationDataset], None, None]:
-
-    exp_dataset = dataset
-    exp_indices = list(range(len(exp_dataset)))
-    exp_targets = torch.as_tensor(
-        list(exp_dataset.targets), dtype=torch.long  # type: ignore
-    )
-
-    if shuffle:
-        exp_indices = torch.as_tensor(exp_indices)[
-            torch.randperm(len(exp_indices))
-        ].tolist()
-    sub_stream_length = len(exp_indices) // experience_size
-    if not drop_last and len(exp_indices) % experience_size > 0:
-        sub_stream_length += 1
-
-    init_idx = 0
-    is_first = True
-    is_last = False
-    exp_idx = 0
-    while init_idx < len(exp_indices):
-        final_idx = init_idx + experience_size  # Exclusive
-        if final_idx > len(exp_indices):
-            if drop_last:
-                break
-
-            final_idx = len(exp_indices)
-            is_last = True
-
-        sub_exp_subset = exp_dataset.subset(exp_indices[init_idx:final_idx])
-        sub_exp_targets: torch.Tensor = exp_targets[
-            exp_indices[init_idx:final_idx]
-        ].unique()
-
-        # origin_stream will be lazily set later
-        exp = OnlineCLExperience(
-            current_experience=exp_idx,
-            origin_stream=None,  # type: ignore
-            benchmark=online_benchmark,
-            dataset=sub_exp_subset,
-            origin_experience=experience,
-            classes_in_this_experience=sub_exp_targets.tolist(),
-            subexp_size=experience_size,
-            is_first_subexp=is_first,
-            is_last_subexp=is_last,
-            sub_stream_length=sub_stream_length,
-            access_task_boundaries=access_task_boundaries,
-        )
-
-        is_first = False
-        yield exp
-        init_idx = final_idx
-        exp_idx += 1
-
-
-
-
-def _default_online_split(
-    online_benchmark,
-    shuffle: bool,
-    drop_last: bool,
-    access_task_boundaries: bool,
-    exp: DatasetExperience[TClassificationDataset],
-    size: int,
-):
-
-    return fixed_size_experience_split(
-        experience=exp,
-        experience_size=size,
-        online_benchmark=online_benchmark,
-        shuffle=False,
-        drop_last=drop_last,
-        access_task_boundaries=access_task_boundaries,
-    )
-
-
-def split_online_stream(
-    #original_stream: Iterable[SupervisedClassificationDataset],
-    original_stream: LazyStreamDefinition,
-    experience_size: int,
-    online_benchmark: "OnlineCLScenario[TClassificationDataset]",
-    shuffle: bool = True,
-    drop_last: bool = False,
-    access_task_boundaries: bool = False,
-) -> CLStream[DatasetExperience[TClassificationDataset]]:
-    print(original_stream)
-    def exps_iter():
-        for one_exp in original_stream:
-            for sub_exp in fixed_size_experience_split(one_exp, 64):
-                yield sub_exp
-
-    stream_name: str = getattr(original_stream, "name", "train")
-    return CLStream(
-        name=stream_name,
-        exps_iter=exps_iter(),
-        set_stream_info=True,
-        benchmark=online_benchmark,
-    )
-
-__all__ = [
-    "OnlineCLExperience",
-    "fixed_size_experience_split",
-    "split_online_stream",
-    "OnlineCLScenario",
-]
-
-
-def avl_data_set(ACTION_EMBEDDING,DATA_FOLDER_PATH,device):
-    splitenum = 72
+def avl_data_set(device):
     print(device)
     #folder_path = "/tmp/pycharm_project_710/datasetcl"
-    folder_path = DATA_FOLDER_PATH
+    folder_path = "/custom/dataset/vo_dataset/test-72exp"# 替换为你的文件夹路径
+    replay_path = REPLAYPATH
+
+
+    replay_files = os.listdir(replay_path)
     files = os.listdir(folder_path)
     # 过滤出以"train"开头的文件名
-    train_files = [f for f in files if f.startswith("train")]
+    train_files = [f for f in replay_files if f.startswith("train_")]
     test_files = [f for f in files if f.startswith("test")]
     val_files = [f for f in files if f.startswith("val")]
     # 按结尾的数字进行排序
@@ -676,23 +493,31 @@ def avl_data_set(ACTION_EMBEDDING,DATA_FOLDER_PATH,device):
         # 提取文件名中第三段的数字
         num = int(file_name.split("_")[2].split(".")[0])
         return num
+
     # 输出排序后的文件名
     #TRAIN_FILE_LIST= sorted(train_files, key=custom_sort)
     #EVAL_FILE_LIST = sorted(val_files, key=custom_sort)
     #TEST_FILE_LIST = sorted(test_files, key=custom_sort)
 
-    TRAIN_FILE_LIST = sorted(train_files, key=custom_sort)
-    EVAL_FILE_LIST = sorted(val_files, key=custom_sort)
+    splitenum = 37
+    splitenum = 1
+    #[24:splitenum+24] 这个是apartment 25，是experience24，是log23
+    TRAIN_FILE_LIST = sorted(train_files, key=custom_sort)[:splitenum]
+    #TRAIN_FILE_LIST = sorted(train_files, key=custom_sort)[0:]
+    EVAL_FILE_LIST = sorted(val_files, key=custom_sort)[35:splitenum+35]
+    #EVAL_FILE_LIST = sorted(val_files, key=custom_sort)[71:]
     TEST_FILE_LIST = sorted(test_files, key=custom_sort)
 
     print(TRAIN_FILE_LIST)
     print(EVAL_FILE_LIST)
     print(TEST_FILE_LIST)
 
-    train_dataset = make_dataset_generator(TRAIN_FILE_LIST,folder_path,"train")
+    train_dataset = make_dataset_generator(TRAIN_FILE_LIST,replay_path,"train")
     test_dataset = make_dataset_generator(TEST_FILE_LIST, folder_path, "test")
-    eval_dataset = make_dataset_generator(EVAL_FILE_LIST, folder_path, "eval")
-    #eval_dataset = make_dataset_generator(EVAL_FILE_LIST,folder_path,"eval")
+    eval_dataset = make_dataset_generator(EVAL_FILE_LIST,folder_path,"eval")
+    print(len(TRAIN_FILE_LIST))
+    print(len(EVAL_FILE_LIST))
+    print(len(TEST_FILE_LIST))
     #[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     trainstream = LazyStreamDefinition(
         exps_generator = train_dataset,
@@ -701,12 +526,12 @@ def avl_data_set(ACTION_EMBEDDING,DATA_FOLDER_PATH,device):
     )
     teststream = LazyStreamDefinition(
          exps_generator = test_dataset,
-         stream_length = len(EVAL_FILE_LIST),
-         exps_task_labels = [0] * splitenum,
+         stream_length = len(TEST_FILE_LIST),
+         exps_task_labels = [0] * 72,
     )
     valstream = LazyStreamDefinition(
         exps_generator = eval_dataset,
-        stream_length = len(TEST_FILE_LIST),
+        stream_length = len(EVAL_FILE_LIST),
         exps_task_labels = [0] * splitenum,
     )
 

@@ -5,8 +5,8 @@ from collections import Counter
 
 
 
-folder_path = '/custom/dataset/vo_dataset/test-18exp'  # 文件夹路径，请替换成你的文件夹路径
-
+folder_path = '/custom/dataset/vo_dataset/test-72exp'  # 文件夹路径，请替换成你的文件夹路径
+folder_path = '/custom/PointNav-VO-single/dataset/vo_dataset'
 # 使用 os.listdir() 列出文件夹中的所有文件
 file_list = os.listdir(folder_path)
 
@@ -27,7 +27,6 @@ right_col_num = 0
 def indexes(h5_f, scence_n_chunk_k):
     valid_act_idxes = np.arange(h5_f[scence_n_chunk_k]["actions"].shape[0])
     return list(valid_act_idxes)
-
 
 
 for file_path in overall_files:
@@ -80,22 +79,22 @@ left_col_per = (left_col_num / left_num) * 100
 
 forward_per = ((forward_num - forward_col_num) / forward_num) * 100
 forward_col_per = (forward_col_num / forward_num) * 100
+
 collision_per = (collision_num / all_num) * 100
-
-print(right_num-right_col_num)
-print(right_col_num)
-print(right_per)
-print(right_col_per)
-
-print(left_num-left_col_num)
-print(left_col_num)
-print(left_per)
-print(left_col_per)
-
-print(forward_num-forward_col_num)
-print(forward_col_num)
-print(forward_per)
-print(forward_col_per)
+collision_all = right_col_num+left_col_num+forward_col_num
+print(f"right numbers {right_num}")
+print(f"right collisions numbers {right_col_num}")
+print(f"right actions have collisions presentage {right_col_per}")
 
 
+print(f"left numbers {left_num}")
+print(f"left collisions numbers {left_col_num}")
+print(f"rleft actions have collisions presentage {left_col_per}")
 
+print(f"forward numbers {forward_num}")
+print(f"forward collisions numbers {forward_col_num}")
+print(f"forward actions have collisions presentage {forward_col_per}")
+
+
+print(f"overall cool {collision_all}")
+print(f"overall cool {collision_num}")

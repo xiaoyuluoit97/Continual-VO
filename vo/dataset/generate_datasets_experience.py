@@ -35,7 +35,7 @@ def set_up_vars(vis_size_w=256, vis_size_h=256):
     global VIS_SIZE_W, VIS_SIZE_H
     global H5PY_COMPRESS_KWARGS, H5PY_COMPRESS_KWARGS_RGB, H5PY_COMPRESS_KWARGS_DEPTH
 
-    CHUNK_SIZE = 1024
+    CHUNK_SIZE = 512
     #CHUNK_SIZE = 128
 
     VIS_SIZE_W = vis_size_w

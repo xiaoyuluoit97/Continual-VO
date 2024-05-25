@@ -113,7 +113,7 @@ class ResNetEncoder(nn.Module):
                 self._n_input_depth
                 + self._n_input_rgb
             )
-
+        input_channels = 1
         # NOTE: visual odometry must not be blind
         assert input_channels > 0
 
@@ -198,7 +198,8 @@ class ResNetEncoder(nn.Module):
             # [0 is pre_rgb; 1 is prev_depth ; 2 is cur_rgb ; 3 cur_depth]
             # [prev_rgb, prev_depth, prev_discretized_depth, prev_top_down_view,
             #  cur_rgb, cur_depth, cur_discretized_depth, cur_top_down_view]
-            cnn_input = [j for i in list(zip(*cnn_input)) for j in i][:5]
+            cnn_input = [j for i in list(zip(*cnn_input)) for j in i][5]
+            #cnn_input = [j for i in list(zip(*cnn_input)) for j in i]
         else:
             if self._n_input_rgb > 0:
                 rgb_observations = observation_pairs[:, :, :, :6]
@@ -228,8 +229,9 @@ class ResNetEncoder(nn.Module):
             # [prev_rgb, prev_depth, prev_discretized_depth, prev_top_down_view,
             #  cur_rgb, cur_depth, cur_discretized_depth, cur_top_down_view]
             cnn_input = [j for i in list(zip(*cnn_input)) for j in i]
-        
-        x = torch.cat(cnn_input, dim=1)
+
+        x = cnn_input
+        #x = torch.cat(cnn_input, dim=1)
         x = self.running_mean_and_var(x)
         x = self.backbone(x)
         x = self.compression(x)
@@ -245,8 +247,8 @@ class VisualOdometryCNNBase(nn.Module):
         normalize_visual_inputs,
         action_embedding,
         hidden_size=512,
-        resnet_baseplanes=64,
-        backbone="resnet50",
+        resnet_baseplanes=32,
+        backbone="resnet18",
         output_dim=DELTA_DIM,
         dropout_p=0,
         after_compression_flat_size=2048,

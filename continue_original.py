@@ -13,8 +13,7 @@ from avalanche.evaluation.metrics import accuracy_metrics, \
     disk_usage_metrics, gpu_usage_metrics, MAC_metrics, \
     ram_usage_metrics, timing_metrics
 from loss_function_avalanche import predict_diff_loss
-from avalanche.benchmarks.scenarios.online_scenario import OnlineCLScenario
-from avalanche.training import OnlineNaive
+
 from datetime import datetime
 import sys
 import wandb
@@ -35,18 +34,21 @@ RGB_PAIR_CHANNEL = 6
 DEPTH_PAIR_CHANNEL = 2
 DELTA_DIM = 3
 
-TRAIN = "naive_60ep"
-RESUME_PATH = "log/naive_60ep"
-TIMES="1"
-RESUME_FILE = "naiveExp56_resume0time.pth"
+TIMES="34"
+TRAIN = "replay_full"
+RESUME_PATH = "log/replay_full"
 
+RESUME_FILE = "replay_fullExp34_resume70time.pth"
+STARTEXP = 70
+
+LOAD_FROM_NUMBERONE = "/custom/online_continue/log/naive_pth/naive_Exp0_FINAL.pth"
 OBSERVATION_SPACE = ["rgb", "depth"]
 
+TEST = True
+FIRSTLOGIN = False
 ESUME_TRAINR = False
-
-
 NORMALIZE = False
-DEVICE = "cuda:1"
+DEVICE = "cuda:0"
 VOTRAIN_LR = 2.5e-4
 VOTRAIN_ESP = 1.0e-8
 VOTRAIN_WEIGHT_DECAY = 0.0
@@ -171,6 +173,9 @@ class CustomSavePlugin(PluginMetric):
         self.wandblogger(result_loss_epoch, 0, strategy.experience.current_experience, self.current_epoch_num)
 
         self.current_epoch_num = self.current_epoch_num + 1
+
+
+
         del result_loss_epoch
         del result_loss
         gc.collect()
@@ -183,12 +188,19 @@ class CustomSavePlugin(PluginMetric):
         #save_path = os.path.join(RESUME_PATH, "naive_Exp{}_resumetwotime.pth".format(str(strategy.experience.current_experience)))
 
         save_path = os.path.join(RESUME_PATH,
-                                 "{}Exp{}_resume{}time.pth".format(TRAIN, str(strategy.experience.current_experience),
-                                                                   TIMES))
+                                 "{}Exp{}_resume{}time.pth".format(TRAIN, str(int(strategy.experience.current_experience)+int(34)),
+                                                                   STARTEXP))
+
         # 保存模型
         torch.save(strategy.model.state_dict(), save_path)
         torch.cuda.synchronize()
         torch.cuda.empty_cache()
+        print(save_path)
+        print(save_path)
+        print(save_path)
+        print(save_path)
+        print(save_path)
+        print(save_path)
         del self.currentexp_train_epoch_iter_info
         gc.collect()
         self.currentexp_train_epoch_iter_info = {}
@@ -356,8 +368,8 @@ class VisualOdometryCNNBase(nn.Module):
         observation_space=OBSERVATION_SPACE,
         observation_size=OBSERVATION_SIZE,
         hidden_size=512,
-        resnet_baseplanes=64,
-        backbone="resnet50",
+        resnet_baseplanes=32,
+        backbone="resnet18",
         normalize_visual_inputs=NORMALIZE,
         output_dim=DELTA_DIM,
         dropout_p=0.2,
@@ -436,13 +448,20 @@ def main():
     model = VisualOdometryCNNBase()
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(total_params)
-    initexperience = 0
+    initexperience = 1
+    if TEST:
+        test(model,device)
+
+    if FIRSTLOGIN:
+        model.load_state_dict(torch.load(LOAD_FROM_NUMBERONE))
+
+
     if ESUME_TRAINR:
         # 使用正则表达式提取信息
         match = re.match(r".*Exp(\d+)_", RESUME_FILE)
         if match:
             exp_number = int(match.group(1))
-            initexperience = exp_number+1
+            initexperience = exp_number+2
             print(initexperience)
             print(initexperience)
             print(initexperience)
@@ -455,7 +474,7 @@ def main():
     criterion = predict_diff_loss()
 
     #pjn = "FINAL-BASELINE-FULLDATASET"
-    pjn = "FULL-Paper-dataset"
+    pjn = "REPLAY"
     wb_logger=WandBLogger(
          project_name=pjn,       # set the wandb project where this run will be logged
          # track hyperparameters and run metadata
@@ -485,7 +504,7 @@ def main():
         #EWCPlugin(ewc_lambda=0.25),
         #LwFPlugin(alpha=0.5, temperature=0.1),
         custom_plugin,
-        early.EarlyStoppingPlugin(patience=10,val_stream_name="test_stream",metric_name="Loss_Stream",mode="min",peval_mode="epoch",margin=0.0,verbose=True),
+        early.EarlyStoppingPlugin(patience=25,val_stream_name="test_stream",metric_name="Loss_Stream",mode="min",peval_mode="epoch",margin=0.0,verbose=True),
         accuracy_metrics(
             minibatch=True,
             epoch=True,
@@ -511,7 +530,7 @@ def main():
         optimizer=optimizer,
         criterion=criterion,
         evaluator=eval_plugin,
-        train_epochs=60,
+        train_epochs=40,
         device=device,
         eval_every=1
     )
@@ -536,10 +555,118 @@ def main():
 
 
 
+def test(model,device):
+    file_names = os.listdir(RESUME_PATH)
+    pattern = re.compile(r".*Exp(-?\d+)_.*\.pth$")
+
+    # 筛选出以 ".pth" 结尾且符合正则表达式的文件
+    pth_files = [file for file in file_names if pattern.match(file)]
+
+    # 按照提取出的数字排序
+    pth_files.sort(key=lambda x: int(pattern.search(x).group(1)))
+
+    # 输出排序后的文件列表
+    #print(pth_files)
+
+    for pth_file in pth_files[72:]:
+        print(pth_file)
+        optimizer = optimizer_continue(model.to(device), "Adam")
+        criterion = predict_diff_loss()
+
+        file_path = os.path.join(RESUME_PATH, pth_file)
+        match = re.match(r".*Exp(-?\d+)_.*", pth_file)
+        if match:
+            print(int(match.group(1)))
+            print(f"now start from exp pth {pth_file}")
+
+
+        else:
+            print("not find any .pth files")
+            sys.exit()
+
+
+        checkpoint = torch.load(file_path)  # 加载检查点
+        model.load_state_dict(checkpoint)
+
+        pjn = "BUFFER-TEST-COLLAS"
+        wb_logger = WandBLogger(
+            project_name=pjn,  # set the wandb project where this run will be logged
+            # track hyperparameters and run metadata
+            config={
+                "learning_rate": VOTRAIN_LR,
+                "Nor": NORMALIZE,
+                "action_emb": False,
+                "architecture": "CNN-Resnet18-TwoHiddenlayer512",
+                "dataset": "Habitat-Gibson-V2",
+                "epochs": 40,
+            })
+
+        # print to stdout
+        interactive_logger = InteractiveLogger()
+        # 根据参数构建一个标识符
+        params_identifier = f"{TRAIN}_Test_Evaluation"
+        # 获取当前日期和时间
+        current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 构建log文件夹路径
+        # log_folder = f"{RESUME_PATH}/csvfile/{current_datetime}_{params_identifier}/"
+        log_folder = f"{RESUME_PATH}/csvfile/"
+        custom_plugin = CustomSavePlugin()
+
+        # 现在你可以将log_folder传递给CSVLogger
+        csv_logger = CSVLogger(log_folder=log_folder)
+        text_logger = TextLogger(open(f"{log_folder}log.txt", "a"))
+
+        eval_plugin = EvaluationPlugin(
+            # EWCPlugin(ewc_lambda=0.25),
+            # LwFPlugin(alpha=0.5, temperature=0.1),
+            custom_plugin,
+            early.EarlyStoppingPlugin(patience=6,val_stream_name="test_stream",metric_name="Loss_Stream",mode="min",peval_mode="epoch",margin=0.0,verbose=True),
+            accuracy_metrics(
+                minibatch=True,
+                epoch=True,
+                epoch_running=True,
+                experience=True,
+                stream=True,
+            ),
+            loss_metrics(
+                minibatch=True,
+                epoch=True,
+                epoch_running=True,
+                experience=True,
+                stream=True,
+            ),
+            # ,wb_logger
+            loggers=[interactive_logger, text_logger, csv_logger],
+            collect_all=True,
+        )
+
+        cl_strategy = Naive(
+            model=model,
+            train_mb_size=32,
+            optimizer=optimizer,
+            criterion=criterion,
+            evaluator=eval_plugin,
+            train_epochs=20,
+            device=device,
+            eval_every=1
+        )
+        benchmark, test_benchmark = avl_data_set(device)
+        print("Training & validation completed,test starting")
+        print("现在将要测试的是")
+        print(int(match.group(1))+1)
+        print(int(match.group(1)) + 1)
+        cl_strategy.eval(test_benchmark.test_stream, shuffle=False)
+        print("Evaluation completed")
+
+    sys.exit()
+
+
+
+
 #@profile(precision=2,stream=open('memorytest/training.log','w+'))
 def training(benchmark,teststream_from_benchmark,cl_strategy,initial_exp):
-
-    for experience in benchmark.train_stream[initial_exp:]:
+#[int(STARTEXP-34):]
+    for experience in benchmark.train_stream:
         print("Start of experience: ", experience.current_experience)
         print("Train dataset contains", len(experience.dataset), "instances")
         i = experience.current_experience
