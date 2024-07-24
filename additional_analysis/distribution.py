@@ -5,9 +5,9 @@ from collections import Counter
 
 
 
-folder_path = '/custom/dataset/vo_dataset/test-72exp'  # 文件夹路径，请替换成你的文件夹路径
+folder_path = '/custom/dataset/vo_dataset/test-72exp'
 folder_path = '/custom/PointNav-VO-single/dataset/vo_dataset'
-# 使用 os.listdir() 列出文件夹中的所有文件
+
 file_list = os.listdir(folder_path)
 
 overall_files = [file for file in file_list if file.startswith('val_')]

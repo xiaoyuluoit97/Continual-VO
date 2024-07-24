@@ -56,25 +56,34 @@ TOnlineCLExperience = TypeVar("TOnlineCLExperience", bound="OnlineCLExperience")
 TOnlineClassificationExperience = TypeVar(
     "TOnlineClassificationExperience", bound="OnlineClassificationExperience"
 )
-TRAIN_BATCH_SIZE = 4
+
 CUR_REL_TO_PREV = 0
 TRAIN_FILE_LIST = []
 TEST_FILE_LIST = []
 EVAL_FILE_LIST = []
 VIS_SIZE_W = 341
 VIS_SIZE_H = 192
+
 CHUNK_NUM_LOAD_MORE = 3
 # num = 27776
 #num = 14912
 # num = 19008
-NUMOFTRAINING=27776
-REPLAYPATH="/custom/dataset/vo_dataset/test-buffer"
+import json
+
+with open('config.json', 'r') as f:
+    config = json.load(f)
+
+
+CHUNK_NUM_LOAD_MORE = config["CHUNK_NUM_LOAD_MORE"]
+NUMOFTRAINING = config["NUMOFTRAINING"]
+dataset_path = config["dataset_path"]
+
 
 FORWARD_ACT_CHANNLE = torch.full((192, 341, 1), 0)
 LEFT_ACT_CHANNLE = torch.full((192, 341, 1), -1)
 RIGHT_ACT_CHANNLE = torch.full((192, 341, 1), 1)
-ESUME_EXP = False
-SKIP = 24
+
+
 def get_num_scence(string):
     match = re.search(r"\d+", string)  # 正则表达式匹配数字部分
     if match:
@@ -99,7 +108,6 @@ class CLPairDataset():
             data_in_memory=None,
             validate_index_inmemory=None,
             target=None,
-
             num_workers=0,
             act_type=-1,
             collision="-1",
@@ -194,46 +202,34 @@ class CLPairDataset():
     def wait_loading(self, num_of_chunk_training):
         # waiting for loading operation
         while num_of_chunk_training not in self.chunk_state or self.chunk_state[num_of_chunk_training] != 2:
-            print("读得太慢")
-            logger.info("读得太慢")
-            logger.info("读得太慢")
-            logger.info("读得太慢")
             self.training_event.wait()
             #self.loading_event.set()
 
     def wait_training(self, num_of_chunk_loading):
         # waiting for training operation
         while num_of_chunk_loading > self._current_training_chunk + CHUNK_NUM_LOAD_MORE:
-            print("读得太慢")
-            logger.info("训练太慢")
-            logger.info("训练太慢")
-            logger.info("训练太慢")
             self.loading_event.wait()
             self.training_event.set()
 
     def training_condition_decide(self):
         # waiting for loading operation
         if self.chunk_state[self._current_training_chunk] == 2:
-            print("读得太慢")
+
             self.training_event.set()
 
     def loading_condition_decide(self):
         if self._current_loading_chunk > self._current_training_chunk + CHUNK_NUM_LOAD_MORE:
-            print("目前读取的chunk大于训练的chunk和读取总和了，该停止了",self._current_loading_chunk,self._current_training_chunk)
-            #print("前Loading event status:", self.loading_event.is_set())
+
             self.loading_event.clear()
             self.loading_event.wait()
-            #print("后Loading event status:", self.loading_event.is_set())
+
         else:
-            #print("目前正在读取的",self._current_loading_chunk,"目前正在训练的",self._current_training_chunk)
-            #print("继续读吧小伙子，训练速度够快")
-            print("读得太慢")
             self.loading_event.set()
     #@profile(precision=2,stream=open('memorytest/_memory_controll.log','w+'))
     def _memory_controll(self, index):
 
         if index == 0:
-            #print("当前index为0")
+
             self._current_training_chunk = 0
             self._current_loading_chunk = 0
             my_thread = threading.Thread(target=self._load_chunk_into_memory)
@@ -248,7 +244,7 @@ class CLPairDataset():
         ind = index % self._chunk_size
         self._current_training_chunk = num_of_chunk
         if ind == 0:
-            #print("新的chunk到了")
+
             self.loading_condition_decide()
         if num_of_chunk > 0 and ind == 0:
             self._remove_data_from_memory(num_of_chunk-1)
@@ -495,7 +491,7 @@ def avl_data_set(device):
     print(device)
     #folder_path = "/tmp/pycharm_project_710/datasetcl"
     folder_path = "/custom/dataset/vo_dataset/test-72exp"# 替换为你的文件夹路径
-    replay_path = REPLAYPATH
+    replay_path = dataset_path
 
 
     replay_files = os.listdir(replay_path)
@@ -504,9 +500,9 @@ def avl_data_set(device):
     train_files = [f for f in replay_files if f.startswith("train_")]
     test_files = [f for f in files if f.startswith("test")]
     val_files = [f for f in files if f.startswith("val")]
-    # 按结尾的数字进行排序
+
     def custom_sort(file_name):
-        # 提取文件名中第三段的数字
+
         num = int(file_name.split("_")[2].split(".")[0])
         return num
 
@@ -518,15 +514,13 @@ def avl_data_set(device):
     #[6:25] sulitenum = 18
     #TRAIN_FILE_LIST = sorted(train_files, key=custom_sort)[26:34]
     #EVAL_FILE_LIST = sorted(val_files, key=custom_sort)[25:33]
-    #[exp:splitenum+exp] 这个是apartment 25 = experience24 = log23
-    #我读log31相当于读exp32，即要训练exp33，用apartment34
-    #我读log33相当于读exp34，即要训练exp35，用apartment36
-    splitenum = 37
-    splitenum = 1
-    #[24:splitenum+24] 这个是apartment 25，是experience24，是log23
+    #[exp:splitenum+exp] apartment 25 = experience24 = log23
+    #load log31 = losd exp32 = train exp33，= use apartment34
+    splitenum = 72
+    #[24:splitenum+24] is apartment 25 = experience24 = log23
     TRAIN_FILE_LIST = sorted(train_files, key=custom_sort)[:splitenum]
     #TRAIN_FILE_LIST = sorted(train_files, key=custom_sort)[0:]
-    EVAL_FILE_LIST = sorted(val_files, key=custom_sort)[35:splitenum+35]
+    EVAL_FILE_LIST = sorted(val_files, key=custom_sort)[:splitenum]
     #EVAL_FILE_LIST = sorted(val_files, key=custom_sort)[71:]
     TEST_FILE_LIST = sorted(test_files, key=custom_sort)
 

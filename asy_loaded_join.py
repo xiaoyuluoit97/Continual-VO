@@ -64,18 +64,20 @@ VIS_SIZE_W = 341
 VIS_SIZE_H = 192
 CHUNK_NUM_LOAD_MORE = 2
 
+dataset_path = "/custom/PointNav-VO-single/dataset/vo_dataset"
+
 FORWARD_ACT_CHANNLE = torch.full((192, 341, 1), 1)
 LEFT_ACT_CHANNLE = torch.full((192, 341, 1), 0)
 RIGHT_ACT_CHANNLE = torch.full((192, 341, 1), 2)
 
 
 def get_num_scence(string):
-    match = re.search(r"\d+", string)  # 正则表达式匹配数字部分
+    match = re.search(r"\d+", string)
     if match:
-        number = int(match.group())  # 提取匹配到的数字
+        number = int(match.group())
         return number
 def get_num(string):
-    # 提取字符串中的num部分作为排序依据
+
     return int(string.split("_")[-1])
 
 # IDatasetWithTargets
@@ -107,10 +109,10 @@ class CLPairDataset():
     ):
 
 
-        self.data = {}  # 用于存储已读取的数据
+        self.data = {}
         self.rgb_d_pairs = {}
         self.targets = {}
-        self.loaded_indices = set()  # 已读取的索引集合
+        self.loaded_indices = set()
         self._data_f = _data_f
         self._eval = eval_flag
         self._scence_num = scence_num
@@ -196,39 +198,38 @@ class CLPairDataset():
     def wait_loading(self, num_of_chunk_training):
         # waiting for loading operation
         while num_of_chunk_training not in self.chunk_state or self.chunk_state[num_of_chunk_training] != 2:
-            logger.info("读得太慢")
+
             self.training_event.wait()
             #self.loading_event.set()
 
     def wait_training(self, num_of_chunk_loading):
         # waiting for training operation
         while num_of_chunk_loading > self._current_training_chunk + CHUNK_NUM_LOAD_MORE:
-            logger.info("训练太慢")
+
             self.loading_event.wait()
             self.training_event.set()
 
     def training_condition_decide(self):
         # waiting for loading operation
         if self.chunk_state[self._current_training_chunk] == 2:
-            print("读得太慢")
+
             self.training_event.set()
 
     def loading_condition_decide(self):
         if self._current_loading_chunk > self._current_training_chunk + CHUNK_NUM_LOAD_MORE:
-            print("目前读取的chunk大于训练的chunk和读取总和了，该停止了",self._current_loading_chunk,self._current_training_chunk)
 
             self.loading_event.clear()
             self.loading_event.wait()
 
         else:
 
-            print("读得太慢")
+
             self.loading_event.set()
 
     def _memory_controll(self, index):
 
         if index == 0:
-            #print("当前index为0")
+
             self._current_training_chunk = 0
             self._current_loading_chunk = 0
             my_thread = threading.Thread(target=self._load_chunk_into_memory)
@@ -243,7 +244,7 @@ class CLPairDataset():
         ind = index % self._chunk_size
         self._current_training_chunk = num_of_chunk
         if ind == 0:
-            #print("新的chunk到了")
+
             self.loading_condition_decide()
         if num_of_chunk > 0 and ind == 0:
             self._remove_data_from_memory(num_of_chunk-1)
@@ -480,18 +481,19 @@ def joint_train_dataload(ACTION_EMBEDDING,DATA_FOLDER_PATH,device):
     splitenum = 0
     print(device)
     #folder_path = "/tmp/pycharm_project_710/datasetcl"
-    folder_path = "/custom/PointNav-VO-single/dataset/vo_dataset"
+    folder_path = dataset_path
+
     files = os.listdir(folder_path)
-    # 过滤出以"train"开头的文件名
+
     train_files = [f for f in files if f.startswith("train")]
     test_files = [f for f in files if f.startswith("test")]
     val_files = [f for f in files if f.startswith("val")]
-    # 按结尾的数字进行排序
+
     def custom_sort(file_name):
-        # 提取文件名中第三段的数字
+
         num = int(file_name.split("_")[1].split(".")[0])
         return num
-    # 输出排序后的文件名
+
     #TRAIN_FILE_LIST= sorted(train_files, key=custom_sort)
     #EVAL_FILE_LIST = sorted(val_files, key=custom_sort)
     #TEST_FILE_LIST = sorted(test_files, key=custom_sort)

@@ -29,34 +29,7 @@ from avalanche.evaluation.metrics import (
 from avalanche.training.plugins import EvaluationPlugin,LwFPlugin,EWCPlugin
 
 import early
-
-RGB_PAIR_CHANNEL = 6
-DEPTH_PAIR_CHANNEL = 2
-DELTA_DIM = 3
-
-TIMES="34"
-TRAIN = "replay_full"
-RESUME_PATH = "log/replay_full"
-
-RESUME_FILE = "replay_fullExp34_resume70time.pth"
-STARTEXP = 70
-
-LOAD_FROM_NUMBERONE = "/custom/online_continue/log/naive_pth/naive_Exp0_FINAL.pth"
-OBSERVATION_SPACE = ["rgb", "depth"]
-
-TEST = True
-FIRSTLOGIN = False
-ESUME_TRAINR = False
-NORMALIZE = False
-DEVICE = "cuda:0"
-VOTRAIN_LR = 2.5e-4
-VOTRAIN_ESP = 1.0e-8
-VOTRAIN_WEIGHT_DECAY = 0.0
-from torchvision.transforms import ToTensor
-OBSERVATION_SIZE = (
-    341,
-    192,
-)
+import json
 
 from avalanche.logging import InteractiveLogger, TextLogger, TensorboardLogger, WandBLogger
 from utils.misc_utils import Flatten
@@ -74,6 +47,30 @@ from avalanche.logging import (
 from typing import List, Dict
 #key of wandb a19e31fa13d7342a558bd4041f695ce47c85cb4f
 
+# 读取 JSON 配置文件
+with open('config.json', 'r') as f:
+    config = json.load(f)
+
+# 使用配置
+RGB_PAIR_CHANNEL = config["RGB_PAIR_CHANNEL"]
+DEPTH_PAIR_CHANNEL = config["DEPTH_PAIR_CHANNEL"]
+DELTA_DIM = config["DELTA_DIM"]
+TIMES = config["TIMES"]
+TRAIN = config["TRAIN"]
+RESUME_PATH = config["RESUME_PATH"]
+RESUME_FILE = config["RESUME_FILE"]
+STARTEXP = config["STARTEXP"]
+LOAD_FROM_NUMBERONE = config["LOAD_FROM_NUMBERONE"]
+OBSERVATION_SPACE = config["OBSERVATION_SPACE"]
+TEST = config["TEST"]
+FIRSTLOGIN = config["FIRSTLOGIN"]
+ESUME_TRAINR = config["ESUME_TRAINR"]
+NORMALIZE = config["NORMALIZE"]
+DEVICE = config["DEVICE"]
+VOTRAIN_LR = config["VOTRAIN_LR"]
+VOTRAIN_ESP = config["VOTRAIN_ESP"]
+VOTRAIN_WEIGHT_DECAY = config["VOTRAIN_WEIGHT_DECAY"]
+OBSERVATION_SIZE = tuple(config["OBSERVATION_SIZE"])
 
 class CustomSavePlugin(PluginMetric):
     def __init__(self):
@@ -233,10 +230,6 @@ class CustomSavePlugin(PluginMetric):
         gc.collect()
         torch.cuda.empty_cache()
         self.currentexp_eval_iter_info = []
-
-
-
-from avalanche.benchmarks.scenarios.generic_scenario import CLExperience
 
 class ResNetEncoder(nn.Module):
     def __init__(
@@ -559,14 +552,9 @@ def test(model,device):
     file_names = os.listdir(RESUME_PATH)
     pattern = re.compile(r".*Exp(-?\d+)_.*\.pth$")
 
-    # 筛选出以 ".pth" 结尾且符合正则表达式的文件
     pth_files = [file for file in file_names if pattern.match(file)]
 
-    # 按照提取出的数字排序
     pth_files.sort(key=lambda x: int(pattern.search(x).group(1)))
-
-    # 输出排序后的文件列表
-    #print(pth_files)
 
     for pth_file in pth_files[72:]:
         print(pth_file)
@@ -585,7 +573,7 @@ def test(model,device):
             sys.exit()
 
 
-        checkpoint = torch.load(file_path)  # 加载检查点
+        checkpoint = torch.load(file_path)
         model.load_state_dict(checkpoint)
 
         pjn = "BUFFER-TEST-COLLAS"
@@ -603,16 +591,15 @@ def test(model,device):
 
         # print to stdout
         interactive_logger = InteractiveLogger()
-        # 根据参数构建一个标识符
+
         params_identifier = f"{TRAIN}_Test_Evaluation"
-        # 获取当前日期和时间
+
         current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # 构建log文件夹路径
+
         # log_folder = f"{RESUME_PATH}/csvfile/{current_datetime}_{params_identifier}/"
         log_folder = f"{RESUME_PATH}/csvfile/"
         custom_plugin = CustomSavePlugin()
 
-        # 现在你可以将log_folder传递给CSVLogger
         csv_logger = CSVLogger(log_folder=log_folder)
         text_logger = TextLogger(open(f"{log_folder}log.txt", "a"))
 
@@ -652,7 +639,6 @@ def test(model,device):
         )
         benchmark, test_benchmark = avl_data_set(device)
         print("Training & validation completed,test starting")
-        print("现在将要测试的是")
         print(int(match.group(1))+1)
         print(int(match.group(1)) + 1)
         cl_strategy.eval(test_benchmark.test_stream, shuffle=False)

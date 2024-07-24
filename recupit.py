@@ -3,34 +3,24 @@ import os
 import random
 from avalanche.evaluation import PluginMetric
 import torch
-import torchmetrics
 import torch.nn as nn
 import torch.optim as optim
 import re
-from avalanche.evaluation.metrics import accuracy_metrics, \
-    loss_metrics, forgetting_metrics, bwt_metrics,\
-    confusion_matrix_metrics, cpu_usage_metrics, \
-    disk_usage_metrics, gpu_usage_metrics, MAC_metrics, \
-    ram_usage_metrics, timing_metrics
+from avalanche.evaluation.metrics import accuracy_metrics
 from loss_function_avalanche import predict_diff_loss
-from avalanche.benchmarks.scenarios.online_scenario import OnlineCLScenario
-from avalanche.training import OnlineNaive
 from datetime import datetime
-import sys
 import wandb
 #from memory_profiler import profile
 #from asy_loaded_avldataset import avl_data_set
 from asy_loaded_actemb import avl_data_set
-from avalanche.training.supervised import Naive,EWC,LwF
+from avalanche.training.supervised import Naive
 from avalanche.training.templates import SupervisedTemplate
 #from kubernetesdlprofile import kubeprofiler
 from avalanche.evaluation.metrics import (
-    timing_metrics,
     loss_metrics
 )
-from avalanche.training.plugins import EvaluationPlugin,LwFPlugin,EWCPlugin
-import vision_transformer
-import early
+from avalanche.training.plugins import EvaluationPlugin
+from additional_part import vision_transformer
 
 RGB_PAIR_CHANNEL = 6
 DEPTH_PAIR_CHANNEL = 2
@@ -51,15 +41,13 @@ DEVICE = "cuda:7"
 VOTRAIN_LR = 2.5e-4
 VOTRAIN_ESP = 1.0e-8
 VOTRAIN_WEIGHT_DECAY = 0.0
-from torchvision.transforms import ToTensor
 OBSERVATION_SIZE = (
     341,
     192,
 )
 
-from avalanche.logging import InteractiveLogger, TextLogger, TensorboardLogger, WandBLogger
+from avalanche.logging import WandBLogger
 from utils.misc_utils import Flatten
-from utils.baseline_registry import baseline_registry
 from model_utils.visual_encoders import resnet
 from model_utils.running_mean_and_var import RunningMeanAndVar
 from vo.common.common_vars import *
@@ -68,9 +56,9 @@ from avalanche.logging import (
     InteractiveLogger,
     TextLogger,
     CSVLogger,
-    TensorboardLogger,
 )
-from typing import List, Dict
+
+
 #key of wandb a19e31fa13d7342a558bd4041f695ce47c85cb4f
 
 
@@ -508,9 +496,6 @@ class CustomSavePlugin(PluginMetric):
         torch.cuda.empty_cache()
         self.currentexp_eval_iter_info = []
 
-
-
-from avalanche.benchmarks.scenarios.generic_scenario import CLExperience
 
 class ResNetEncoder(nn.Module):
     def __init__(

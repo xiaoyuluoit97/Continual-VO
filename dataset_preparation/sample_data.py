@@ -16,7 +16,7 @@ output_path = "/custom/dataset/vo_dataset/replaybuffer5120"
 h5_files = [file for file in os.listdir(file_path) if file.endswith('.h5') and file.startswith('train_')]
 h5_files = sorted(h5_files, key=lambda x: int(x.split('_')[-1].split('.')[0]))
 # Open the H5 file
-# 13888, 5120, 1024 36开始
+# 13888, 5120, 1024 36
 #"replayfor_"+str(current_exp)+".h5")
 current_exp = CURRENT
 buffer_size = 5120

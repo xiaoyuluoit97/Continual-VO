@@ -66,8 +66,19 @@ CHUNK_NUM_LOAD_MORE = 3
 # num = 27776
 #num = 14912
 # num = 19008
-NUMOFTRAINING=27776
-REPLAYPATH = "/custom/dataset/vo_dataset/test-buffer"
+import json
+
+with open('config.json', 'r') as f:
+    config = json.load(f)
+
+
+CHUNK_NUM_LOAD_MORE = config["CHUNK_NUM_LOAD_MORE"]
+NUMOFTRAINING = config["NUMOFTRAINING"]
+dataset_path = config["dataset_path"]
+
+
+
+
 FORWARD_ACT_CHANNLE = torch.full((192, 341, 1), 0)
 LEFT_ACT_CHANNLE = torch.full((192, 341, 1), -1)
 RIGHT_ACT_CHANNLE = torch.full((192, 341, 1), 1)
@@ -473,13 +484,11 @@ def make_dataset_generator(filelist, folder_path,flag):
 
 
 
-
-
 def avl_data_set(device):
     print(device)
     #folder_path = "/tmp/pycharm_project_710/datasetcl"
     folder_path = "/custom/dataset/vo_dataset/test-72exp"# 替换为你的文件夹路径
-    replay_path = REPLAYPATH
+    replay_path = dataset_path
 
 
     replay_files = os.listdir(replay_path)
