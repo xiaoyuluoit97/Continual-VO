@@ -47,11 +47,10 @@ from avalanche.logging import (
 from typing import List, Dict
 #key of wandb a19e31fa13d7342a558bd4041f695ce47c85cb4f
 
-# 读取 JSON 配置文件
 with open('config.json', 'r') as f:
     config = json.load(f)
 
-# 使用配置
+
 RGB_PAIR_CHANNEL = config["RGB_PAIR_CHANNEL"]
 DEPTH_PAIR_CHANNEL = config["DEPTH_PAIR_CHANNEL"]
 DELTA_DIM = config["DELTA_DIM"]

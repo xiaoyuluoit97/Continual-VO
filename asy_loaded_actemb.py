@@ -212,32 +212,24 @@ class CLPairDataset():
     def wait_training(self, num_of_chunk_loading):
         # waiting for training operation
         while num_of_chunk_loading > self._current_training_chunk + CHUNK_NUM_LOAD_MORE:
-            #logger.info("训练太慢")
             self.loading_event.wait()
             self.training_event.set()
 
     def training_condition_decide(self):
         # waiting for loading operation
         if self.chunk_state[self._current_training_chunk] == 2:
-            #print("读得太慢")
             self.training_event.set()
 
     def loading_condition_decide(self):
         if self._current_loading_chunk > self._current_training_chunk + CHUNK_NUM_LOAD_MORE:
-            print("目前读取的chunk大于训练的chunk和读取总和了，该停止了",self._current_loading_chunk,self._current_training_chunk)
-            #print("前Loading event status:", self.loading_event.is_set())
             self.loading_event.clear()
             self.loading_event.wait()
-            #print("后Loading event status:", self.loading_event.is_set())
         else:
-
-            #print("读得太慢")
             self.loading_event.set()
 
     def _memory_controll(self, index):
 
         if index == 0:
-            #print("当前index为0")
             self._current_training_chunk = 0
             self._current_loading_chunk = 0
             my_thread = threading.Thread(target=self._load_chunk_into_memory)
@@ -252,7 +244,6 @@ class CLPairDataset():
         ind = index % self._chunk_size
         self._current_training_chunk = num_of_chunk
         if ind == 0:
-            #print("新的chunk到了")
             self.loading_condition_decide()
         if num_of_chunk > 0 and ind == 0:
             self._remove_data_from_memory(num_of_chunk-1)
@@ -288,7 +279,6 @@ class CLPairDataset():
 
     def _load_chunk_into_memory(self):
         #num_of_chunk = int(index / self._chunk_size)
-        print("要开始动手读取了注意注意注意！")
         with self.memory_loading_lock:
             for chunk_k in self._chunk_splits:
                 number_of_chunk = get_num(chunk_k)
@@ -329,7 +319,6 @@ class CLPairDataset():
                 #time.sleep(12000)
                 for i, idx in enumerate(index_of_per_chunk):
                     rgb_d_pair, target = self._process_data(number_of_chunk, idx)
-                    # 查找某个对象的引用关系
                     self.rgb_d_pairs[number_of_chunk].append(rgb_d_pair)
                     self.targets[number_of_chunk].append(target)
 
@@ -493,13 +482,10 @@ def avl_data_set(device):
 
     replay_files = os.listdir(replay_path)
     files = os.listdir(folder_path)
-    # 过滤出以"train"开头的文件名
     train_files = [f for f in replay_files if f.startswith("train_")]
     test_files = [f for f in files if f.startswith("test")]
     val_files = [f for f in files if f.startswith("val")]
-    # 按结尾的数字进行排序
     def custom_sort(file_name):
-        # 提取文件名中第三段的数字
         num = int(file_name.split("_")[2].split(".")[0])
         return num
 

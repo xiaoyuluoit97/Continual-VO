@@ -27,39 +27,8 @@ from avalanche.evaluation.metrics import (
     loss_metrics
 )
 from avalanche.training.plugins import EvaluationPlugin,LwFPlugin,EWCPlugin
-
-import early
-
-RGB_PAIR_CHANNEL = 6
-DEPTH_PAIR_CHANNEL = 2
-DELTA_DIM = 3
-
-TRAIN = "replay_act_full"
-RESUME_PATH = "log/replay_act_full"
-TIMES="34"
-STARTEXP = 70
-RESUME_FILE = "replay_act_fullExp69_resume25time.pth"
-LOAD_FROM_NUMBERONE = "/custom/online_continue/log/act_lwf_pth/ACT_lwf_Exp0_FINAL.pth"
-OBSERVATION_SPACE = ["rgb", "depth"]
-
-
-TEST = True
-FIRSTLOGIN = False
-ESUME_TRAINR = False
-NORMALIZE = False
-DEVICE = "cuda:0"
-VOTRAIN_LR = 2.5e-4
-VOTRAIN_ESP = 1.0e-8
-VOTRAIN_WEIGHT_DECAY = 0.0
-from torchvision.transforms import ToTensor
-OBSERVATION_SIZE = (
-    341,
-    192,
-)
-
 from avalanche.logging import InteractiveLogger, TextLogger, TensorboardLogger, WandBLogger
 from utils.misc_utils import Flatten
-from utils.baseline_registry import baseline_registry
 from model_utils.visual_encoders import resnet
 from model_utils.running_mean_and_var import RunningMeanAndVar
 from vo.common.common_vars import *
@@ -70,6 +39,34 @@ from avalanche.logging import (
     CSVLogger,
     TensorboardLogger,
 )
+
+import early
+import json
+
+with open('config.json', 'r') as f:
+    config = json.load(f)
+
+
+RGB_PAIR_CHANNEL = config["RGB_PAIR_CHANNEL"]
+DEPTH_PAIR_CHANNEL = config["DEPTH_PAIR_CHANNEL"]
+DELTA_DIM = config["DELTA_DIM"]
+TIMES = config["TIMES"]
+TRAIN = config["TRAIN"]
+RESUME_PATH = config["RESUME_PATH"]
+RESUME_FILE = config["RESUME_FILE"]
+STARTEXP = config["STARTEXP"]
+LOAD_FROM_NUMBERONE = config["LOAD_FROM_NUMBERONE"]
+OBSERVATION_SPACE = config["OBSERVATION_SPACE"]
+TEST = config["TEST"]
+FIRSTLOGIN = config["FIRSTLOGIN"]
+ESUME_TRAINR = config["ESUME_TRAINR"]
+NORMALIZE = config["NORMALIZE"]
+DEVICE = config["DEVICE"]
+VOTRAIN_LR = config["VOTRAIN_LR"]
+VOTRAIN_ESP = config["VOTRAIN_ESP"]
+VOTRAIN_WEIGHT_DECAY = config["VOTRAIN_WEIGHT_DECAY"]
+OBSERVATION_SIZE = tuple(config["OBSERVATION_SIZE"])
+
 from typing import List, Dict
 #key of wandb a19e31fa13d7342a558bd4041f695ce47c85cb4f
 

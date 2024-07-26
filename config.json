@@ -9,7 +9,7 @@
   "STARTEXP": 70,
   "LOAD_FROM_NUMBERONE": "/custom/online_continue/log/naive_pth/naive_Exp0_FINAL.pth",
   "OBSERVATION_SPACE": ["rgb", "depth"],
-  "TEST": true,
+  "TEST": false,
   "FIRSTLOGIN": false,
   "ESUME_TRAINR": false,
   "NORMALIZE": false,
