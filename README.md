@@ -72,3 +72,8 @@ python continual_vo_act.py
 We use wandb to monitor the training process and visualize the training results. Please check here to deploy your own wandb.
 
 https://wandb.ai/
+
+### Contact
+Please contact xiaoyu.luo.it@gmail.com for any reproducing questions.
+
+
