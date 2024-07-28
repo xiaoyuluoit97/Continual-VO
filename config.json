@@ -2,6 +2,7 @@
   "RGB_PAIR_CHANNEL": 6,
   "DEPTH_PAIR_CHANNEL": 2,
   "DELTA_DIM": 3,
+
   "TIMES": "34",
   "TRAIN": "replay_full",
   "RESUME_PATH": "log/replay_full",
@@ -19,6 +20,20 @@
   "VOTRAIN_WEIGHT_DECAY": 0.0,
   "OBSERVATION_SIZE": [341, 192],
   "CHUNK_NUM_LOAD_MORE": 3,
-  "NUMOFTRAINING": 27776,
-  "dataset_path": "/custom/dataset/vo_dataset/test-buffer"
+  "NUMOFTRAINING": 13888,
+  "dataset_path": "/custom/dataset/vo_dataset/test-buffer",
+
+  "USE_EWC": false,
+  "EWC_LAMBDA": 0.25,
+
+  "USE_LWF": false,
+  "LWF_ALPHA": 0.5,
+  "LWF_TEMP": 0.1,
+
+  "USE_EARLYSTOP": true,
+  "EARLY_PATIENCE": 6,
+
+  "TRAIN_MB_SIZE": 32,
+  "TRAIN_EPOCHS": 40,
+  "EVAL_EVERY": 1
 }

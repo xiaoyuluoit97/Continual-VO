@@ -13,6 +13,28 @@ You can execute :
 ```
 docker pull luoxiaoyuwow/cl-baseline:latest 
 ```
+### Dataset generation & Joint training baseline reproduce
+Our joint training baseline is based on the work of Zhao et al. Please check their git repo for setting up. 
+
+https://github.com/Xiaoming-Zhao/PointNav-VO
+
+To generate the dataset scence by scence, please use the following .py file in our repo.
+```
+vo/dataset/generate_datasets_continual.py
+
+vo/models/vo_cnn.py
+```
+To reproduce joint baseline, plese use the following model
+```
+@baseline_registry.register_vo_model(name="vo_cnn_rgb_d")
+
+@baseline_registry.register_vo_model(name="vo_cnn_rgb_d_emb")
+```
+After generating please run the .sh file to shuffle all trajectories.
+```
+dataset_preparation/shuffle.sh
+```
+Please check the readme in dataset_preparation for more detail about replay dataset setup
 
 ### Training Setup
 Please check the config.json:
@@ -22,12 +44,20 @@ Please check the config.json:
   "RESUME_PATH": "log/replay_full", # The resume path
   "RESUME_FILE": "replay_fullExp34_resume70time.pth", # The resume 
   "STARTEXP": 70, # Resume start from experience number
+  
   "LOAD_FROM_NUMBERONE": "/Continual-VO/log/naive_pth/naive_Exp0_FINAL.pth", # .pth file path
   "TEST": false, # testing flag
   "ESUME_TRAINR": false, # resume training
   "NUMOFTRAINING": 27776, # 13888 normal training, 27776 is full buffer size training
   "dataset_path": "/dataset/vo_dataset/test-buffer" # please check the path
+  
+  "USE_EWC": false,     # use the EWC
+  "EWC_LAMBDA": 0.25,
+  "USE_LWF": false,     # use the LwF
+  "LWF_ALPHA": 0.5,
+  "LWF_TEMP": 0.1,
 ```
+
 To train & test the continual learning VO baseline 
 ```
 python continual_vo.py
@@ -37,3 +67,8 @@ To train & test the continual learning VO with action embedding
 ```
 python continual_vo_act.py
 ```
+
+### Result Visualization
+We use wandb to monitor the training process and visualize the training results. Please check here to deploy your own wandb.
+
+https://wandb.ai/

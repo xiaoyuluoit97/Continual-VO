@@ -85,7 +85,7 @@ class CustomSavePlugin(PluginMetric):
         self.current_exp_num = 0
         self.batch_size = 128
 
-        self.currentexp_train_epoch_iter_info = {}  # 用于存储已读取的数据
+        self.currentexp_train_epoch_iter_info = {}
 
         self.currentexp_eval_iter_info = []
 
@@ -176,14 +176,12 @@ class CustomSavePlugin(PluginMetric):
 
     def after_training_exp(self, strategy: 'PluggableStrategy'):
         os.makedirs(RESUME_PATH, exist_ok=True)
-        # 拼接保存路径
-        #save_path = os.path.join(RESUME_PATH, "naive_Exp{}_resumetwotime.pth".format(str(strategy.experience.current_experience)))
 
 
         save_path = os.path.join(RESUME_PATH,
                                  "{}Exp{}_resume{}time.pth".format(TRAIN, str(int(strategy.experience.current_experience)+int(34)),
                                                                    STARTEXP))
-        # 保存模型
+
         torch.save(strategy.model.state_dict(), save_path)
         torch.cuda.synchronize()
         torch.cuda.empty_cache()
@@ -451,11 +449,9 @@ def main():
 
     if FIRSTLOGIN:
         model.load_state_dict(torch.load(LOAD_FROM_NUMBERONE))
-        print("LOAD成功啦！！")
 
 
     if ESUME_TRAINR:
-        # 使用正则表达式提取信息
         match = re.match(r".*Exp(\d+)_", RESUME_FILE)
         if match:
             exp_number = int(match.group(1))
@@ -464,7 +460,7 @@ def main():
             print(initexperience)
             print(initexperience)
         else:
-            print("未找到匹配的模式")
+
             initexperience = -1
         model.load_state_dict(torch.load(os.path.join(RESUME_PATH,RESUME_FILE)))
 
@@ -488,21 +484,36 @@ def main():
 
     # print to stdout
     interactive_logger = InteractiveLogger()
-    # 根据参数构建一个标识符
+
     params_identifier = f"{TRAIN}resume{TIMES}_{ESUME_TRAINR}"
-    # 获取当前日期和时间
+
     current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # 构建log文件夹路径
+
     log_folder = f"{RESUME_PATH}/{current_datetime}_{params_identifier}/"
-    # 现在你可以将log_folder传递给CSVLogger
+
     csv_logger = CSVLogger(log_folder=log_folder)
     text_logger = TextLogger(open(f"{log_folder}log.txt", "a"))
 
+    plugins = []
+
+    if config["USE_EWC"]:
+        plugins.append(EWCPlugin(ewc_lambda=config["EWC_LAMBDA"]))
+    if config["USE_LWF"]:
+        plugins.append(LwFPlugin(alpha=config["LWF_ALPHA"], temperature=config["LWF_TEMP"]))
+    if config["USE_EARLYSTOP"]:
+        plugins.append(early.EarlyStoppingPlugin(
+            patience=config["EARLY_PATIENCE"],
+            val_stream_name="test_stream",
+            metric_name="Loss_Stream",
+            mode="min",
+            peval_mode="epoch",
+            margin=0.0,
+            verbose=True
+        ))
+
     eval_plugin = EvaluationPlugin(
-        #EWCPlugin(ewc_lambda=0.25),
-        #LwFPlugin(alpha=0.5, temperature=0.1),
+        *plugins,
         custom_plugin,
-        early.EarlyStoppingPlugin(patience=10,val_stream_name="test_stream",metric_name="Loss_Stream",mode="min",peval_mode="epoch",margin=0.0,verbose=True),
         accuracy_metrics(
             minibatch=True,
             epoch=True,
@@ -517,31 +528,22 @@ def main():
             experience=True,
             stream=True,
         ),
-        #,wb_logger
+        # ,wb_logger
         loggers=[interactive_logger, text_logger, csv_logger],
         collect_all=True,
     )
 
     cl_strategy = Naive(
         model=model,
-        train_mb_size=32,
+        train_mb_size=config["TRAIN_MB_SIZE"],
         optimizer=optimizer,
         criterion=criterion,
         evaluator=eval_plugin,
-        train_epochs=40,
+        train_epochs=config["TRAIN_EPOCHS"],
         device=device,
-        eval_every=1
+        eval_every=config["EVAL_EVERY"]
     )
-    #cl_strategy = EWC(
-    #    model=model,
-    #    train_mb_size=128,
-    #    ewc_lambda = 1,
-    #    optimizer=optimizer,
-    #    criterion=criterion,
-    #    evaluator=eval_plugin,
-    #    train_epochs=40,
-    #    device=device,
-    #)
+
 
 
     benchmark,test_benchmark= avl_data_set(device)
@@ -555,16 +557,12 @@ def test(model,device):
     file_names = os.listdir(RESUME_PATH)
     pattern = re.compile(r".*Exp(-?\d+)_.*\.pth$")
 
-    # 筛选出以 ".pth" 结尾且符合正则表达式的文件
     pth_files = [file for file in file_names if pattern.match(file)]
 
-    # 按照提取出的数字排序
     pth_files.sort(key=lambda x: int(pattern.search(x).group(1)))
 
-    # 输出排序后的文件列表
-    #print(pth_files)
 
-    for pth_file in pth_files[71:]:
+    for pth_file in pth_files:
         print(pth_files)
         optimizer = optimizer_continue(model.to(device), "Adam")
         criterion = predict_diff_loss()
@@ -581,7 +579,7 @@ def test(model,device):
             sys.exit()
 
 
-        checkpoint = torch.load(file_path)  # 加载检查点
+        checkpoint = torch.load(file_path)
         model.load_state_dict(checkpoint)
 
         pjn = "BUFFER-TEST-COLLAS"
@@ -599,22 +597,15 @@ def test(model,device):
 
         # print to stdout
         interactive_logger = InteractiveLogger()
-        # 根据参数构建一个标识符
-        params_identifier = f"{TRAIN}_Test_Evaluation"
-        # 获取当前日期和时间
-        current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # 构建log文件夹路径
-        # log_folder = f"{RESUME_PATH}/csvfile/{current_datetime}_{params_identifier}/"
+
         log_folder = f"{RESUME_PATH}/csvfile/"
         custom_plugin = CustomSavePlugin()
 
-        # 现在你可以将log_folder传递给CSVLogger
         csv_logger = CSVLogger(log_folder=log_folder)
         text_logger = TextLogger(open(f"{log_folder}log.txt", "a"))
 
         eval_plugin = EvaluationPlugin(
-            # EWCPlugin(ewc_lambda=0.25),
-            # LwFPlugin(alpha=0.5, temperature=0.1),
+
             custom_plugin,
             early.EarlyStoppingPlugin(patience=6,val_stream_name="test_stream",metric_name="Loss_Stream",mode="min",peval_mode="epoch",margin=0.0,verbose=True),
             accuracy_metrics(
@@ -638,17 +629,17 @@ def test(model,device):
 
         cl_strategy = Naive(
             model=model,
-            train_mb_size=32,
+            train_mb_size=config["TRAIN_MB_SIZE"],
             optimizer=optimizer,
             criterion=criterion,
             evaluator=eval_plugin,
-            train_epochs=50,
+            train_epochs=config["TRAIN_EPOCHS"],
             device=device,
-            eval_every=1
+            eval_every=config["EVAL_EVERY"]
         )
         benchmark, test_benchmark = avl_data_set(device)
         print("Training & validation completed,test starting")
-        print("现在将要测试的是")
+        print("Now test")
         print(int(match.group(1))+1)
         print(int(match.group(1)) + 1)
         cl_strategy.eval(test_benchmark.test_stream, shuffle=False)

@@ -5,11 +5,15 @@ import os
 import argparse
 from tqdm import tqdm
 parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('-CURRENT', metavar='N', type=int, nargs='?', default=10,
+parser.add_argument('-CURRENT', metavar='N', type=int, nargs='?', default=0,
                     help='An integer for the accumulator')
+parser.add_argument('-BUFFER_SIZE', metavar='N', type=int, nargs='?', default=13888,
+                    help='An integer for the accumulator')
+
 
 args = parser.parse_args()
 CURRENT = args.CURRENT
+BUFFER_SIZE = args.BUFFER_SIZE
 
 file_path = "/custom/dataset/vo_dataset/test-72exp"
 output_path = "/custom/dataset/vo_dataset/replaybuffer5120"
@@ -19,7 +23,7 @@ h5_files = sorted(h5_files, key=lambda x: int(x.split('_')[-1].split('.')[0]))
 # 13888, 5120, 1024 36
 #"replayfor_"+str(current_exp)+".h5")
 current_exp = CURRENT
-buffer_size = 5120
+buffer_size = BUFFER_SIZE
 CHUNKSIZE = 512
 VIS_SIZE_W= 341
 VIS_SIZE_H= 192

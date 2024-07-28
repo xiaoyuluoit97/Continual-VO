@@ -530,6 +530,41 @@ class VisualOdometryCNNWider(VisualOdometryCNNBase):
             output_dim=output_dim,
             dropout_p=dropout_p,
         )
+@baseline_registry.register_vo_model(name="vo_cnn_rgb_d")
+class VisualOdometryCNNDiscretizedDepth(VisualOdometryCNNBase):
+    def __init__(
+        self,
+        *,
+        observation_space,
+        observation_size,
+        hidden_size=512,
+        resnet_baseplanes=32,
+        backbone="resnet18",
+        normalize_visual_inputs=False,
+        output_dim=DEFAULT_DELTA_STATE_SIZE,
+        dropout_p=0.2,
+        discretized_depth_channels=0,
+        top_down_view_pair_channel=TOP_DOWN_VIEW_PAIR_CHANNEL,
+        acts_channle=True,
+    ):
+        assert acts_channle == True
+        assert backbone == "resnet18"
+        assert "discretized_depth" not in observation_space
+        assert "top_down_view" not in observation_space
+
+        super().__init__(
+            observation_space=observation_space,
+            observation_size=observation_size,
+            hidden_size=hidden_size,
+            resnet_baseplanes=resnet_baseplanes,
+            backbone=backbone,
+            normalize_visual_inputs=normalize_visual_inputs,
+            output_dim=output_dim,
+            dropout_p=dropout_p,
+            discretized_depth_channels=discretized_depth_channels,
+            after_compression_flat_size=2048,
+        )
+
 
 @baseline_registry.register_vo_model(name="vo_cnn_rgb_d_emb")
 class VisualOdometryCNNEMBd(VisualOdometryCNNWithChannelBase):

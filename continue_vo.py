@@ -69,7 +69,12 @@ DEVICE = config["DEVICE"]
 VOTRAIN_LR = config["VOTRAIN_LR"]
 VOTRAIN_ESP = config["VOTRAIN_ESP"]
 VOTRAIN_WEIGHT_DECAY = config["VOTRAIN_WEIGHT_DECAY"]
+
 OBSERVATION_SIZE = tuple(config["OBSERVATION_SIZE"])
+
+
+
+
 
 class CustomSavePlugin(PluginMetric):
     def __init__(self):
@@ -449,7 +454,7 @@ def main():
 
 
     if ESUME_TRAINR:
-        # 使用正则表达式提取信息
+
         match = re.match(r".*Exp(\d+)_", RESUME_FILE)
         if match:
             exp_number = int(match.group(1))
@@ -458,14 +463,14 @@ def main():
             print(initexperience)
             print(initexperience)
         else:
-            print("未找到匹配的模式")
+
             initexperience = -1
         model.load_state_dict(torch.load(os.path.join(RESUME_PATH,RESUME_FILE)))
 
     optimizer = optimizer_continue(model.to(device), "Adam")
     criterion = predict_diff_loss()
 
-    #pjn = "FINAL-BASELINE-FULLDATASET"
+
     pjn = "REPLAY"
     wb_logger=WandBLogger(
          project_name=pjn,       # set the wandb project where this run will be logged
@@ -482,21 +487,36 @@ def main():
 
     # print to stdout
     interactive_logger = InteractiveLogger()
-    # 根据参数构建一个标识符
+
     params_identifier = f"{TRAIN}resume{TIMES}_{ESUME_TRAINR}"
-    # 获取当前日期和时间
+
     current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # 构建log文件夹路径
+
     log_folder = f"{RESUME_PATH}/{current_datetime}_{params_identifier}/"
-    # 现在你可以将log_folder传递给CSVLogger
+
     csv_logger = CSVLogger(log_folder=log_folder)
     text_logger = TextLogger(open(f"{log_folder}log.txt", "a"))
 
+    plugins = []
+
+    if config["USE_EWC"]:
+        plugins.append(EWCPlugin(ewc_lambda=config["EWC_LAMBDA"]))
+    if config["USE_LWF"]:
+        plugins.append(LwFPlugin(alpha=config["LWF_ALPHA"], temperature=config["LWF_TEMP"]))
+    if config["USE_EARLYSTOP"]:
+        plugins.append(early.EarlyStoppingPlugin(
+            patience=config["EARLY_PATIENCE"],
+            val_stream_name="test_stream",
+            metric_name="Loss_Stream",
+            mode="min",
+            peval_mode="epoch",
+            margin=0.0,
+            verbose=True
+        ))
+
     eval_plugin = EvaluationPlugin(
-        #EWCPlugin(ewc_lambda=0.25),
-        #LwFPlugin(alpha=0.5, temperature=0.1),
+        *plugins,
         custom_plugin,
-        early.EarlyStoppingPlugin(patience=25,val_stream_name="test_stream",metric_name="Loss_Stream",mode="min",peval_mode="epoch",margin=0.0,verbose=True),
         accuracy_metrics(
             minibatch=True,
             epoch=True,
@@ -518,25 +538,14 @@ def main():
 
     cl_strategy = Naive(
         model=model,
-        train_mb_size=32,
+        train_mb_size=config["TRAIN_MB_SIZE"],
         optimizer=optimizer,
         criterion=criterion,
         evaluator=eval_plugin,
-        train_epochs=40,
+        train_epochs=config["TRAIN_EPOCHS"],
         device=device,
-        eval_every=1
+        eval_every=config["EVAL_EVERY"]
     )
-    #cl_strategy = EWC(
-    #    model=model,
-    #    train_mb_size=128,
-    #    ewc_lambda = 1,
-    #    optimizer=optimizer,
-    #    criterion=criterion,
-    #    evaluator=eval_plugin,
-    #    train_epochs=40,
-    #    device=device,
-    #)
-
 
     benchmark,test_benchmark= avl_data_set(device)
     print("start from experience")
@@ -555,7 +564,7 @@ def test(model,device):
 
     pth_files.sort(key=lambda x: int(pattern.search(x).group(1)))
 
-    for pth_file in pth_files[72:]:
+    for pth_file in pth_files:
         print(pth_file)
         optimizer = optimizer_continue(model.to(device), "Adam")
         criterion = predict_diff_loss()
@@ -603,8 +612,6 @@ def test(model,device):
         text_logger = TextLogger(open(f"{log_folder}log.txt", "a"))
 
         eval_plugin = EvaluationPlugin(
-            # EWCPlugin(ewc_lambda=0.25),
-            # LwFPlugin(alpha=0.5, temperature=0.1),
             custom_plugin,
             early.EarlyStoppingPlugin(patience=6,val_stream_name="test_stream",metric_name="Loss_Stream",mode="min",peval_mode="epoch",margin=0.0,verbose=True),
             accuracy_metrics(
@@ -628,13 +635,13 @@ def test(model,device):
 
         cl_strategy = Naive(
             model=model,
-            train_mb_size=32,
+            train_mb_size=config["TRAIN_MB_SIZE"],
             optimizer=optimizer,
             criterion=criterion,
             evaluator=eval_plugin,
-            train_epochs=20,
+            train_epochs=config["TRAIN_EPOCHS"],
             device=device,
-            eval_every=1
+            eval_every=config["EVAL_EVERY"]
         )
         benchmark, test_benchmark = avl_data_set(device)
         print("Training & validation completed,test starting")
@@ -650,7 +657,7 @@ def test(model,device):
 
 #@profile(precision=2,stream=open('memorytest/training.log','w+'))
 def training(benchmark,teststream_from_benchmark,cl_strategy,initial_exp):
-#[int(STARTEXP-34):]
+
     for experience in benchmark.train_stream:
         print("Start of experience: ", experience.current_experience)
         print("Train dataset contains", len(experience.dataset), "instances")

@@ -20,8 +20,6 @@ h5_files = sorted(h5_files, key=lambda x: int(x.split('_')[-1].split('.')[0]))
 
 def main():
     print(h5_files)
-    #print("Processing file:", h5_file)
-    #test_Brevort_20.h5 5555555
     for h5file in tqdm(h5_files[CURRENT:(CURRENT+1)]):
         print(os.path.join(file_path, h5file))
         with h5py.File(os.path.join(file_path,h5file), 'r+')  as f:
