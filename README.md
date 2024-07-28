@@ -14,7 +14,7 @@ You can execute :
 docker pull luoxiaoyuwow/cl-baseline:latest 
 ```
 ### Dataset generation & Joint training baseline reproduce
-Our joint training baseline is based on the work of Zhao et al. Please check their git repo for setting up. 
+Our joint training baseline is based on the work of Zhao et al. Please check their git repo for setup. 
 
 https://github.com/Xiaoming-Zhao/PointNav-VO
 
