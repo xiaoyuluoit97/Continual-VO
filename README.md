@@ -41,15 +41,14 @@ Please check the config.json:
 ```
   "TIMES": "0", # The resume times
   "TRAIN": "replay_full", # The experiments name
-  "RESUME_PATH": "log/replay_full", # The resume path
-  "RESUME_FILE": "replay_fullExp34_resume70time.pth", # The resume 
+  "RESUME_PATH": "log/replay_full", # The resume dir path
+  "RESUME_FILE": "replay_fullExp34_resume70time.pth", # Which consist by "(experiemnt name)_(experience numbers)_(resume times).pth"
   "STARTEXP": 70, # Resume start from experience number
   
-  "LOAD_FROM_NUMBERONE": "/Continual-VO/log/naive_pth/naive_Exp0_FINAL.pth", # .pth file path
   "TEST": false, # testing flag
   "ESUME_TRAINR": false, # resume training
-  "NUMOFTRAINING": 27776, # 13888 normal training, 27776 is full buffer size training
-  "dataset_path": "/dataset/vo_dataset/test-buffer" # please check the path
+  "NUMOFTRAINING": 13888, # 13888 normal training, 27776 is full buffer size training
+  "dataset_path": "/dataset/vo_dataset/test-buffer" # path of dataset
   
   "USE_EWC": false,     # use the EWC
   "EWC_LAMBDA": 0.25,
