@@ -73,6 +73,4 @@ We use wandb to monitor the training process and visualize the training results.
 https://wandb.ai/
 
 ### Contact
-Please feel free to contact xiaoyu.luo.it@gmail.com for any reproducing questions.
-
-
+Please feel free to contact xiaoyu.luo.it@gmail.com or report any issues directly on our GitHub repo for any paper reproducing questions.
