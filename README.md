@@ -14,27 +14,27 @@ You can execute :
 docker pull luoxiaoyuwow/cl-baseline:latest 
 ```
 ### Dataset generation & Joint training baseline reproduce
-Our joint training baseline is based on the work of Zhao et al. Please check their git repo for setup. 
+Our joint training baseline and dataset generation are based on the work of Zhao et al. Please check their git repo for setup. 
 
 https://github.com/Xiaoming-Zhao/PointNav-VO
 
-To generate the dataset scence by scence, please use the following .py file in our repo.
+To generate the dataset scene by scene, please use the following .py file in our repo.
 ```
 vo/dataset/generate_datasets_continual.py
 
 vo/models/vo_cnn.py
 ```
-To reproduce joint baseline, plese use the following model
+To reproduce the joint baseline, please use the following model
 ```
 @baseline_registry.register_vo_model(name="vo_cnn_rgb_d")
 
 @baseline_registry.register_vo_model(name="vo_cnn_rgb_d_emb")
 ```
-After generating please run the .sh file to shuffle all trajectories.
+After generating please run the .sh file to shuffle all trajectories. (Don't do it if you would like to simulate a complete sequence scenario)
 ```
 dataset_preparation/shuffle.sh
 ```
-Please check the readme in dataset_preparation for more detail about replay dataset setup
+Please check the readme in /dataset_preparation for more details about the replay dataset setup
 
 ### Training Setup
 Please check the config.json:
@@ -74,6 +74,6 @@ We use wandb to monitor the training process and visualize the training results.
 https://wandb.ai/
 
 ### Contact
-Please contact xiaoyu.luo.it@gmail.com for any reproducing questions.
+Please feel free to contact xiaoyu.luo.it@gmail.com for any reproducing questions.
 
 
